@@ -2,7 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Layout from './components/Layout';
-
+import TeacherDashboard from './pages/teacher/TeacherDashboard';
 import LoginPage          from './pages/LoginPage';
 import ChangePasswordPage from './pages/ChangePasswordPage';
 import AdminDashboard     from './pages/admin/AdminDashboard';
@@ -48,7 +48,7 @@ function AppRoutes() {
       <Route path="/admin/reports"     element={<PrivateRoute role="ADMIN"><ReportsPage /></PrivateRoute>} />
 
       {/* Teacher routes */}
-      <Route path="/teacher"           element={<PrivateRoute><Placeholder title="Teacher Dashboard" /></PrivateRoute>} />
+      <Route path="/teacher" element={<PrivateRoute><TeacherDashboard /></PrivateRoute>} />
       <Route path="/teacher/marks"     element={<PrivateRoute><MarkEntryPage /></PrivateRoute>} />
       <Route path="/teacher/analytics" element={<PrivateRoute><TeacherAnalyticsPage /></PrivateRoute>} />
       <Route path="/teacher/reports"   element={<PrivateRoute><ReportsPage /></PrivateRoute>} />
