@@ -16,7 +16,7 @@ export default function LoginPage() {
     try {
       const { data } = await login(form);
       loginUser(data);
-      if (data.isFirstLogin) {
+      if (data.firstLogin) {
         navigate('/change-password');
       } else {
         navigate(data.role === 'ADMIN' ? '/admin' : '/teacher');
