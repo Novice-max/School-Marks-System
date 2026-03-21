@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getMyAssignments, getTeacherStudents, getExams, enterMarksBulk } from '../../api/client';
 import toast from 'react-hot-toast';
+import api from '../../api/client';
 
 export default function MarkEntryPage() {
   const [assignments,    setAssignments]    = useState([]);
@@ -22,7 +23,7 @@ export default function MarkEntryPage() {
 
     const [studRes, examRes] = await Promise.all([
       getTeacherStudents(a.classRoom.classId),
-      getExams(),
+      api.get(`/teacher/exams/class/${a.classRoom.classId}`),
     ]);
     setStudents(studRes.data);
     setExams(examRes.data.filter(e => e.classRoom?.classId === a.classRoom.classId));

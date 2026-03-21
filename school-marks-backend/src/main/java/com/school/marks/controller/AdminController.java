@@ -43,7 +43,27 @@ public class AdminController {
     public ResponseEntity<List<Student>> getAllStudents() { return ResponseEntity.ok(studentRepository.findAll()); }
 
     @PostMapping("/students")
-    public ResponseEntity<Student> createStudent(@RequestBody Student student) { return ResponseEntity.ok(studentRepository.save(student)); }
+    public ResponseEntity<Student> createStudent(@RequestBody Map<String, Object> body) {
+        ClassRoom classRoom = classRoomRepository.findById(
+            Long.valueOf(((Map<?,?>)body.get("classRoom")).get("classId").toString())
+        ).orElseThrow(() -> new RuntimeException("Class not found"));
+
+        Student student = Student.builder()
+                .firstName((String) body.get("firstName"))
+                .lastName((String) body.get("lastName"))
+                .admissionNumber((String) body.get("admissionNumber"))
+                .gender((String) body.get("gender"))
+                .parentContact((String) body.get("parentContact"))
+                .classRoom(classRoom)
+                .isActive(true)
+                .build();
+
+        if (body.get("dateOfBirth") != null && !body.get("dateOfBirth").toString().isEmpty()) {
+            student.setDateOfBirth(java.time.LocalDate.parse(body.get("dateOfBirth").toString()));
+        }
+
+        return ResponseEntity.ok(studentRepository.save(student));
+    }
 
     @GetMapping("/students/class/{classId}")
     public ResponseEntity<List<Student>> getStudentsByClass(@PathVariable Long classId) {
@@ -60,10 +80,43 @@ public class AdminController {
     public ResponseEntity<List<Exam>> getAllExams() { return ResponseEntity.ok(examRepository.findAll()); }
 
     @PostMapping("/exams")
-    public ResponseEntity<Exam> createExam(@RequestBody Exam exam) { return ResponseEntity.ok(examRepository.save(exam)); }
+    public ResponseEntity<Exam> createExam(@RequestBody Map<String, Object> body) {
+        ClassRoom classRoom = classRoomRepository.findById(
+            Long.valueOf(((Map<?,?>)body.get("classRoom")).get("classId").toString())
+        ).orElseThrow(() -> new RuntimeException("Class not found"));
+
+        Exam exam = Exam.builder()
+                .examName((String) body.get("examName"))
+                .term(Integer.valueOf(body.get("term").toString()))
+                .academicYear((String) body.get("academicYear"))
+                .classRoom(classRoom)
+                .build();
+
+        return ResponseEntity.ok(examRepository.save(exam));
+    }
 
     @PostMapping("/assign")
-    public ResponseEntity<TeacherSubjectAssignment> assignTeacher(@RequestBody TeacherSubjectAssignment assignment) {
+    public ResponseEntity<TeacherSubjectAssignment> assignTeacher(@RequestBody Map<String, Object> body) {
+        Teacher teacher = teacherRepository.findById(
+            Long.valueOf(((Map<?,?>)body.get("teacher")).get("teacherId").toString())
+        ).orElseThrow(() -> new RuntimeException("Teacher not found"));
+
+        Subject subject = subjectRepository.findById(
+            Long.valueOf(((Map<?,?>)body.get("subject")).get("subjectId").toString())
+        ).orElseThrow(() -> new RuntimeException("Subject not found"));
+
+        ClassRoom classRoom = classRoomRepository.findById(
+            Long.valueOf(((Map<?,?>)body.get("classRoom")).get("classId").toString())
+        ).orElseThrow(() -> new RuntimeException("Class not found"));
+
+        TeacherSubjectAssignment assignment = TeacherSubjectAssignment.builder()
+                .teacher(teacher)
+                .subject(subject)
+                .classRoom(classRoom)
+                .academicYear((String) body.get("academicYear"))
+                .term(Integer.valueOf(body.get("term").toString()))
+                .build();
+
         return ResponseEntity.ok(assignmentRepository.save(assignment));
     }
 

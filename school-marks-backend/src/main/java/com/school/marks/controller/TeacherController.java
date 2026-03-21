@@ -11,6 +11,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
+import com.school.marks.model.Exam;
 @RestController
 @RequestMapping("/api/teacher")
 @RequiredArgsConstructor
@@ -50,5 +51,10 @@ public class TeacherController {
     @GetMapping("/marklist/{examId}")
     public ResponseEntity<List<StudentMarkSummaryDTO>> getMarklist(@PathVariable Long examId) {
         return ResponseEntity.ok(markService.getClassMarkList(examId));
+    }
+    // Get exams for a class (teacher needs this for mark entry)
+    @GetMapping("/exams/class/{classId}")
+    public ResponseEntity<List<Exam>> getExamsByClass(@PathVariable Long classId) {
+        return ResponseEntity.ok(examRepository.findByClassRoom_ClassId(classId));
     }
 }

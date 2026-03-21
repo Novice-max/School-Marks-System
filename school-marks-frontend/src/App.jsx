@@ -6,11 +6,15 @@ import Layout from './components/Layout';
 import LoginPage          from './pages/LoginPage';
 import ChangePasswordPage from './pages/ChangePasswordPage';
 import AdminDashboard     from './pages/admin/AdminDashboard';
+import ClassesPage        from './pages/admin/ClassesPage';
+import TeachersPage       from './pages/admin/TeachersPage';
+import StudentsPage       from './pages/admin/StudentsPage';
+import ExamsPage          from './pages/admin/ExamsPage';
+import AssignmentsPage    from './pages/admin/AssignmentsPage';
 import ReportsPage        from './pages/ReportsPage';
 import MarkEntryPage      from './pages/teacher/MarkEntryPage';
 import TeacherAnalyticsPage from './pages/teacher/TeacherAnalyticsPage';
 
-// Placeholder pages (build these after core is working)
 const Placeholder = ({ title }) => (
   <div style={{ padding: 40, textAlign: 'center', color: '#888' }}>
     <div style={{ fontSize: 48, marginBottom: 16 }}>🚧</div>
@@ -28,20 +32,19 @@ function PrivateRoute({ children, role }) {
 
 function AppRoutes() {
   const { user } = useAuth();
-
   return (
     <Routes>
       <Route path="/login" element={user ? <Navigate to={user.role === 'ADMIN' ? '/admin' : '/teacher'} /> : <LoginPage />} />
       <Route path="/change-password" element={<ChangePasswordPage />} />
 
       {/* Admin routes */}
-      <Route path="/admin" element={<PrivateRoute role="ADMIN"><AdminDashboard /></PrivateRoute>} />
-      <Route path="/admin/teachers"    element={<PrivateRoute role="ADMIN"><Placeholder title="Teacher Management" /></PrivateRoute>} />
-      <Route path="/admin/students"    element={<PrivateRoute role="ADMIN"><Placeholder title="Student Management" /></PrivateRoute>} />
-      <Route path="/admin/classes"     element={<PrivateRoute role="ADMIN"><Placeholder title="Class Management" /></PrivateRoute>} />
-      <Route path="/admin/subjects"    element={<PrivateRoute role="ADMIN"><Placeholder title="Subject Management" /></PrivateRoute>} />
-      <Route path="/admin/exams"       element={<PrivateRoute role="ADMIN"><Placeholder title="Exam Management" /></PrivateRoute>} />
-      <Route path="/admin/assignments" element={<PrivateRoute role="ADMIN"><Placeholder title="Teacher Assignments" /></PrivateRoute>} />
+      <Route path="/admin"             element={<PrivateRoute role="ADMIN"><AdminDashboard /></PrivateRoute>} />
+      <Route path="/admin/teachers"    element={<PrivateRoute role="ADMIN"><TeachersPage /></PrivateRoute>} />
+      <Route path="/admin/students"    element={<PrivateRoute role="ADMIN"><StudentsPage /></PrivateRoute>} />
+      <Route path="/admin/classes"     element={<PrivateRoute role="ADMIN"><ClassesPage /></PrivateRoute>} />
+      <Route path="/admin/subjects"    element={<PrivateRoute role="ADMIN"><Placeholder title="Subjects (auto-seeded from CBC)" /></PrivateRoute>} />
+      <Route path="/admin/exams"       element={<PrivateRoute role="ADMIN"><ExamsPage /></PrivateRoute>} />
+      <Route path="/admin/assignments" element={<PrivateRoute role="ADMIN"><AssignmentsPage /></PrivateRoute>} />
       <Route path="/admin/reports"     element={<PrivateRoute role="ADMIN"><ReportsPage /></PrivateRoute>} />
 
       {/* Teacher routes */}
