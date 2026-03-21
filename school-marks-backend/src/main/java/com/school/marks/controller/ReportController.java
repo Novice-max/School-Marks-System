@@ -42,4 +42,18 @@ public class ReportController {
 
         return ResponseEntity.ok().headers(headers).body(pdf);
     }
+    @GetMapping("/school/{academicYear}/{term}/{examName}")
+    public ResponseEntity<byte[]> downloadSchoolReport(
+            @PathVariable String academicYear,
+            @PathVariable Integer term,
+            @PathVariable String examName) throws Exception {
+        byte[] pdf = reportService.generateSchoolReportPdf(academicYear, term, examName);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_PDF);
+        headers.setContentDisposition(
+            ContentDisposition.attachment()
+                .filename("school_report_" + academicYear + "_term" + term + ".pdf")
+                .build());
+        return ResponseEntity.ok().headers(headers).body(pdf);
+    }
 }

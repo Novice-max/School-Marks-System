@@ -14,6 +14,7 @@ import AssignmentsPage    from './pages/admin/AssignmentsPage';
 import ReportsPage        from './pages/ReportsPage';
 import MarkEntryPage      from './pages/teacher/MarkEntryPage';
 import TeacherAnalyticsPage from './pages/teacher/TeacherAnalyticsPage';
+import SubjectsPage from './pages/admin/SubjectsPage';
 
 const Placeholder = ({ title }) => (
   <div style={{ padding: 40, textAlign: 'center', color: '#888' }}>
@@ -42,7 +43,7 @@ function AppRoutes() {
       <Route path="/admin/teachers"    element={<PrivateRoute role="ADMIN"><TeachersPage /></PrivateRoute>} />
       <Route path="/admin/students"    element={<PrivateRoute role="ADMIN"><StudentsPage /></PrivateRoute>} />
       <Route path="/admin/classes"     element={<PrivateRoute role="ADMIN"><ClassesPage /></PrivateRoute>} />
-      <Route path="/admin/subjects"    element={<PrivateRoute role="ADMIN"><Placeholder title="Subjects (auto-seeded from CBC)" /></PrivateRoute>} />
+      <Route path="/admin/subjects" element={<PrivateRoute role="ADMIN"><SubjectsPage /></PrivateRoute>} />
       <Route path="/admin/exams"       element={<PrivateRoute role="ADMIN"><ExamsPage /></PrivateRoute>} />
       <Route path="/admin/assignments" element={<PrivateRoute role="ADMIN"><AssignmentsPage /></PrivateRoute>} />
       <Route path="/admin/reports"     element={<PrivateRoute role="ADMIN"><ReportsPage /></PrivateRoute>} />

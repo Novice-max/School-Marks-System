@@ -33,7 +33,8 @@ public class ReportService {
     private static final DeviceRgb ME_COLOR      = new DeviceRgb(60, 130, 200);
     private static final DeviceRgb AE_COLOR      = new DeviceRgb(220, 150, 0);
     private static final DeviceRgb BE_COLOR      = new DeviceRgb(200, 50, 50);
-
+    private final ClassRoomRepository classRoomRepository;
+    
     // ──────────────────────────────────────────────────────────────
     // CLASS MARKLIST PDF
     // ──────────────────────────────────────────────────────────────
@@ -312,4 +313,89 @@ public class ReportService {
                 ? (avg >= 75 ? "EE" : avg >= 50 ? "ME" : avg >= 25 ? "AE" : "BE")
                 : (avg >= 80 ? "EE" : avg >= 60 ? "ME" : avg >= 40 ? "AE" : "BE");
     }
+    public byte[] generateSchoolReportPdf(String academicYear, Integer term, String examName) throws Exception {
+    // Get all classes
+    List<com.school.marks.model.ClassRoom> classes = classRoomRepository.findByAcademicYear(academicYear);
+
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    PdfWriter writer = new PdfWriter(baos);
+    PdfDocument pdf = new PdfDocument(writer);
+    pdf.setDefaultPageSize(com.itextpdf.kernel.geom.PageSize.A4.rotate());
+    Document doc = new Document(pdf);
+    doc.setMargins(30, 30, 30, 30);
+
+    PdfFont bold    = PdfFontFactory.createFont(com.itextpdf.io.font.constants.StandardFonts.HELVETICA_BOLD);
+    PdfFont regular = PdfFontFactory.createFont(com.itextpdf.io.font.constants.StandardFonts.HELVETICA);
+
+    // School header
+    doc.add(new Paragraph("SCHOOL MARKS MANAGEMENT SYSTEM")
+            .setFont(bold).setFontSize(16).setTextAlignment(TextAlignment.CENTER)
+            .setFontColor(HEADER_COLOR));
+    doc.add(new Paragraph("School-Wide Report — " + examName + " | Term " + term + " | " + academicYear)
+            .setFont(regular).setFontSize(12).setTextAlignment(TextAlignment.CENTER));
+    doc.add(new Paragraph(" "));
+
+    if (classes.isEmpty()) {
+        doc.add(new Paragraph("No classes found for " + academicYear).setFont(regular));
+        doc.close();
+        return baos.toByteArray();
+    }
+
+    for (com.school.marks.model.ClassRoom classRoom : classes) {
+        // Find exam for this class
+        List<com.school.marks.model.Exam> exams = examRepository
+            .findByClassRoom_ClassIdAndTermAndAcademicYear(classRoom.getClassId(), term, academicYear);
+        
+        java.util.Optional<com.school.marks.model.Exam> examOpt = exams.stream()
+            .filter(e -> e.getExamName().equalsIgnoreCase(examName))
+            .findFirst();
+
+        if (examOpt.isEmpty()) continue;
+
+        List<com.school.marks.dto.StudentMarkSummaryDTO> marklist = 
+            markService.getClassMarkList(examOpt.get().getExamId());
+
+        if (marklist.isEmpty()) continue;
+
+        // Class header
+        doc.add(new Paragraph(classRoom.getDisplayName())
+                .setFont(bold).setFontSize(13).setFontColor(HEADER_COLOR).setMarginTop(10));
+
+        Table table = new Table(UnitValue.createPercentArray(new float[]{1,2,3,2,1,1,1}))
+                .setWidth(UnitValue.createPercentValue(100));
+
+        for (String h : new String[]{"#","Adm No.","Name","Subjects Sat","Total","Average","Grade"}) {
+            addHeaderCell(table, h, bold);
+        }
+
+        boolean alt = false;
+        for (com.school.marks.dto.StudentMarkSummaryDTO st : marklist) {
+            DeviceRgb rowColor = alt ? ALT_ROW_COLOR : null;
+            addCell(table, String.valueOf(st.getPosition()), regular, rowColor);
+            addCell(table, st.getAdmissionNumber(), regular, rowColor);
+            addCell(table, st.getFullName(), regular, rowColor);
+            addCell(table, String.valueOf(st.getSubjectMarks().size()), regular, rowColor);
+            addCell(table, String.format("%.1f", st.getTotalScore()), regular, rowColor);
+            addCell(table, String.format("%.2f", st.getAverage()), regular, rowColor);
+            String grade = classRoom.getGradeLevel() <= 3
+                ? (st.getAverage() >= 75 ? "EE" : st.getAverage() >= 50 ? "ME" : st.getAverage() >= 25 ? "AE" : "BE")
+                : (st.getAverage() >= 80 ? "EE" : st.getAverage() >= 60 ? "ME" : st.getAverage() >= 40 ? "AE" : "BE");
+            Cell gradeCell = new Cell().add(new Paragraph(grade).setFont(bold).setFontSize(9).setFontColor(getGradeColor(grade)))
+                    .setTextAlignment(TextAlignment.CENTER).setVerticalAlignment(VerticalAlignment.MIDDLE);
+            if (rowColor != null) gradeCell.setBackgroundColor(rowColor);
+            table.addCell(gradeCell);
+            alt = !alt;
+        }
+
+        doc.add(table);
+
+        double classAvg = marklist.stream().mapToDouble(x -> x.getAverage() != null ? x.getAverage() : 0).average().orElse(0);
+        doc.add(new Paragraph(String.format("Class Average: %.2f  |  Students: %d", classAvg, marklist.size()))
+                .setFont(bold).setFontSize(10).setFontColor(HEADER_COLOR).setMarginBottom(10));
+    }
+
+    doc.close();
+    return baos.toByteArray();
+}
+
 }

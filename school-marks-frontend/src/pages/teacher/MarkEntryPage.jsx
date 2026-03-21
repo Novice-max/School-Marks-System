@@ -1,32 +1,59 @@
 import { useEffect, useState } from 'react';
-import { getMyAssignments, getTeacherStudents, getExams, enterMarksBulk } from '../../api/client';
-import toast from 'react-hot-toast';
+import { getMyAssignments, getTeacherStudents, enterMarksBulk } from '../../api/client';
 import api from '../../api/client';
+import toast from 'react-hot-toast';
 
 export default function MarkEntryPage() {
-  const [assignments,    setAssignments]    = useState([]);
-  const [selected,       setSelected]       = useState(null); // { subjectId, classId, subjectName, className }
-  const [exams,          setExams]          = useState([]);
-  const [selectedExam,   setSelectedExam]   = useState('');
-  const [students,       setStudents]       = useState([]);
-  const [marks,          setMarks]          = useState({}); // { studentId: score }
-  const [saving,         setSaving]         = useState(false);
+  const [assignments,   setAssignments]   = useState([]);
+  const [selected,      setSelected]      = useState(null);
+  const [exams,         setExams]         = useState([]);
+  const [selectedExam,  setSelectedExam]  = useState('');
+  const [students,      setStudents]      = useState([]);
+  const [marks,         setMarks]         = useState({});
+  const [originalMarks, setOriginalMarks] = useState({});
+  const [saving,        setSaving]        = useState(false);
+  const [hasExisting,   setHasExisting]   = useState(false);
 
   useEffect(() => {
-    getMyAssignments().then(r => setAssignments(r.data)).catch(() => toast.error('Failed to load assignments'));
+    getMyAssignments()
+      .then(r => setAssignments(r.data))
+      .catch(() => toast.error('Failed to load assignments'));
   }, []);
 
   const selectAssignment = async (a) => {
     setSelected(a);
     setSelectedExam('');
     setMarks({});
-
+    setOriginalMarks({});
+    setHasExisting(false);
     const [studRes, examRes] = await Promise.all([
       getTeacherStudents(a.classRoom.classId),
       api.get(`/teacher/exams/class/${a.classRoom.classId}`),
     ]);
     setStudents(studRes.data);
-    setExams(examRes.data.filter(e => e.classRoom?.classId === a.classRoom.classId));
+    setExams(examRes.data);
+  };
+
+  const selectExam = async (examId) => {
+    setSelectedExam(examId);
+    setMarks({});
+    setOriginalMarks({});
+    setHasExisting(false);
+    if (!examId || !selected) return;
+    try {
+      const res = await api.get(`/teacher/marks/${examId}/${selected.subject.subjectId}`);
+      const existing = res.data;
+      if (existing.length > 0) {
+        const markMap = {};
+        existing.forEach(m => { markMap[m.student.studentId] = m.score; });
+        setMarks(markMap);
+        setOriginalMarks({ ...markMap });
+        setHasExisting(true);
+        toast.success(`Loaded ${existing.length} existing marks — edit and re-save to update`);
+      }
+    } catch {
+      // No existing marks — fresh entry
+    }
   };
 
   const handleScore = (studentId, value) => {
@@ -46,7 +73,13 @@ export default function MarkEntryPage() {
 
   const save = async () => {
     const entries = students
-      .filter(s => marks[s.studentId] !== undefined && marks[s.studentId] !== '')
+      .filter(s => {
+        const val = marks[s.studentId];
+        if (val === undefined || val === '') return false;
+        // Only include if new or actually changed from original
+        const orig = originalMarks[s.studentId];
+        return orig === undefined || Number(val) !== Number(orig);
+      })
       .map(s => ({
         studentId: s.studentId,
         subjectId: selected.subject.subjectId,
@@ -54,11 +87,19 @@ export default function MarkEntryPage() {
         score:     Number(marks[s.studentId]),
       }));
 
-    if (!entries.length) { toast.error('No marks to save'); return; }
+    if (!entries.length) {
+      toast.error(hasExisting ? 'No changes made' : 'No marks to save');
+      return;
+    }
     setSaving(true);
     try {
       await enterMarksBulk(entries);
-      toast.success(`✅ ${entries.length} marks saved successfully`);
+      // Update originals so re-saving shows 0 changes again
+      const updated = {};
+      entries.forEach(e => { updated[e.studentId] = e.score; });
+      setOriginalMarks(prev => ({ ...prev, ...updated }));
+      setHasExisting(true);
+      toast.success(`✅ ${entries.length} mark${entries.length !== 1 ? 's' : ''} ${hasExisting ? 'updated' : 'saved'} successfully`);
     } catch (err) {
       toast.error(err.response?.data?.message || 'Save failed');
     } finally {
@@ -66,37 +107,44 @@ export default function MarkEntryPage() {
     }
   };
 
+  const filledCount  = students.filter(s => marks[s.studentId] !== undefined && marks[s.studentId] !== '').length;
+  const changedCount = students.filter(s => {
+    const val = marks[s.studentId];
+    if (val === undefined || val === '') return false;
+    const orig = originalMarks[s.studentId];
+    return orig === undefined || Number(val) !== Number(orig);
+  }).length;
+
   return (
     <div>
-      <h1 style={styles.pageTitle}>✏️ Enter Marks</h1>
+      <h1 style={st.pageTitle}>✏️ Enter Marks</h1>
 
       {/* Assignment picker */}
-      <div style={styles.section}>
-        <h3 style={styles.sectionTitle}>1. Select Subject & Class</h3>
-        <div style={styles.assignmentGrid}>
+      <div style={st.section}>
+        <h3 style={st.sectionTitle}>1. Select Subject & Class</h3>
+        <div style={st.assignmentGrid}>
           {assignments.map(a => (
             <button
               key={a.assignmentId}
-              style={{ ...styles.assignCard, ...(selected?.assignmentId === a.assignmentId ? styles.assignCardActive : {}) }}
+              style={{ ...st.assignCard, ...(selected?.assignmentId === a.assignmentId ? st.assignCardActive : {}) }}
               onClick={() => selectAssignment(a)}
             >
-              <div style={styles.assignSubject}>{a.subject.subjectName}</div>
-              <div style={styles.assignClass}>{a.classRoom.displayName}</div>
-              <div style={styles.assignTerm}>Term {a.term} · {a.academicYear}</div>
+              <div style={st.assignSubject}>{a.subject.subjectName}</div>
+              <div style={st.assignClass}>{a.classRoom.displayName}</div>
+              <div style={st.assignTerm}>Term {a.term} · {a.academicYear}</div>
             </button>
           ))}
           {assignments.length === 0 && (
-            <p style={{ color: '#aaa' }}>No subjects assigned to you yet. Contact admin.</p>
+            <p style={{ color: '#aaa' }}>No subjects assigned. Contact admin.</p>
           )}
         </div>
       </div>
 
       {/* Exam picker */}
       {selected && (
-        <div style={styles.section}>
-          <h3 style={styles.sectionTitle}>2. Select Exam</h3>
-          <select style={styles.select} value={selectedExam}
-            onChange={e => setSelectedExam(e.target.value)}>
+        <div style={st.section}>
+          <h3 style={st.sectionTitle}>2. Select Exam</h3>
+          <select style={st.select} value={selectedExam} onChange={e => selectExam(e.target.value)}>
             <option value="">— Choose exam —</option>
             {exams.map(e => (
               <option key={e.examId} value={e.examId}>{e.examName} · Term {e.term} · {e.academicYear}</option>
@@ -107,35 +155,66 @@ export default function MarkEntryPage() {
 
       {/* Mark entry table */}
       {selected && selectedExam && (
-        <div style={styles.section}>
-          <div style={styles.tableHeader}>
-            <h3 style={styles.sectionTitle}>
-              3. Enter Marks — {selected.subject.subjectName} · {selected.classRoom.displayName}
-            </h3>
-            <span style={styles.totalBadge}>{students.length} students</span>
+        <div style={st.section}>
+          <div style={st.tableHeader}>
+            <div>
+              <h3 style={st.sectionTitle}>
+                3. {hasExisting ? 'Edit Marks' : 'Enter Marks'} — {selected.subject.subjectName} · {selected.classRoom.displayName}
+              </h3>
+              {hasExisting && (
+                <div style={st.editBanner}>
+                  ✏️ Existing marks loaded — edit any score and click Update to save changes
+                </div>
+              )}
+            </div>
+            <div style={st.badges}>
+              <span style={st.totalBadge}>{students.length} students</span>
+              <span style={{ ...st.totalBadge, background: '#dcfce7', color: '#16a34a' }}>
+                {filledCount} filled
+              </span>
+              {hasExisting && changedCount > 0 && (
+                <span style={{ ...st.totalBadge, background: '#fef3c7', color: '#d97706' }}>
+                  {changedCount} changed
+                </span>
+              )}
+              {students.length - filledCount > 0 && (
+                <span style={{ ...st.totalBadge, background: '#fee2e2', color: '#dc2626' }}>
+                  {students.length - filledCount} missing
+                </span>
+              )}
+            </div>
           </div>
 
-          <table style={styles.table}>
+          <table style={st.table}>
             <thead>
               <tr>
                 {['#', 'Adm No.', 'Student Name', 'Score (0–100)', 'Grade', 'Points'].map(h => (
-                  <th key={h} style={styles.th}>{h}</th>
+                  <th key={h} style={st.th}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {students.map((s, i) => {
-                const score = marks[s.studentId] ?? '';
-                const grade = score !== '' ? getGrade(score, s.classRoom?.gradeLevel || selected.classRoom.gradeLevel) : '';
-                const pts   = { EE: 4, ME: 3, AE: 2, BE: 1 }[grade] || '';
+                const score      = marks[s.studentId] ?? '';
+                const origScore  = originalMarks[s.studentId];
+                const isChanged  = score !== '' && origScore !== undefined && Number(score) !== Number(origScore);
+                const isNew      = score !== '' && origScore === undefined;
+                const gradeLevel = s.classRoom?.gradeLevel || selected.classRoom.gradeLevel;
+                const grade      = score !== '' ? getGrade(score, gradeLevel) : '';
+                const pts        = { EE: 4, ME: 3, AE: 2, BE: 1 }[grade] || '';
+
                 return (
                   <tr key={s.studentId} style={{ background: i % 2 === 0 ? '#f8fafc' : '#fff' }}>
-                    <td style={styles.td}>{i + 1}</td>
-                    <td style={styles.td}>{s.admissionNumber}</td>
-                    <td style={{ ...styles.td, textAlign: 'left', fontWeight: 500 }}>{s.firstName} {s.lastName}</td>
-                    <td style={styles.td}>
+                    <td style={st.td}>{i + 1}</td>
+                    <td style={st.td}>{s.admissionNumber}</td>
+                    <td style={{ ...st.td, textAlign: 'left', fontWeight: 500 }}>{s.firstName} {s.lastName}</td>
+                    <td style={st.td}>
                       <input
-                        style={styles.scoreInput}
+                        style={{
+                          ...st.scoreInput,
+                          borderColor: isChanged ? '#f59e0b' : isNew ? '#22c55e' : '#dde3ea',
+                          background:  isChanged ? '#fffbeb' : isNew ? '#f0fdf4' : score !== '' ? '#f0f9ff' : '#fff',
+                        }}
                         type="number"
                         min={0} max={100}
                         value={score}
@@ -143,27 +222,38 @@ export default function MarkEntryPage() {
                         placeholder="—"
                       />
                     </td>
-                    <td style={{ ...styles.td, fontWeight: 700, color: gradeColor(grade) }}>{grade}</td>
-                    <td style={styles.td}>{pts}</td>
+                    <td style={{ ...st.td, fontWeight: 700, color: gradeColor(grade) }}>{grade || '—'}</td>
+                    <td style={st.td}>{pts || '—'}</td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
 
-          <button style={styles.saveBtn} onClick={save} disabled={saving}>
-            {saving ? 'Saving...' : '💾 Save All Marks'}
-          </button>
+          <div style={st.saveRow}>
+            <button style={st.saveBtn} onClick={save} disabled={saving}>
+              {saving ? 'Saving...' : hasExisting ? '💾 Update Marks' : '💾 Save All Marks'}
+            </button>
+            {hasExisting && changedCount === 0 && (
+              <span style={{ fontSize: 13, color: '#888' }}>No changes to save</span>
+            )}
+            {students.length - filledCount > 0 && (
+              <span style={st.warning}>
+                ⚠️ {students.length - filledCount} student(s) have no score
+              </span>
+            )}
+          </div>
         </div>
       )}
     </div>
   );
 }
 
-const styles = {
+const st = {
   pageTitle:       { fontSize: 24, fontWeight: 700, color: '#1e3a5f', marginBottom: 24 },
   section:         { background: '#fff', borderRadius: 12, padding: 24, marginBottom: 20, boxShadow: '0 2px 12px rgba(0,0,0,.06)' },
-  sectionTitle:    { fontSize: 15, fontWeight: 700, color: '#1e3a5f', marginBottom: 16 },
+  sectionTitle:    { fontSize: 15, fontWeight: 700, color: '#1e3a5f', marginBottom: 8 },
+  editBanner:      { fontSize: 13, color: '#1d4ed8', background: '#eff6ff', padding: '6px 12px', borderRadius: 6, marginBottom: 12, display: 'inline-block' },
   assignmentGrid:  { display: 'flex', gap: 12, flexWrap: 'wrap' },
   assignCard:      { padding: '14px 20px', borderRadius: 10, border: '2px solid #e2e8f0', background: '#f8fafc', cursor: 'pointer', textAlign: 'left', minWidth: 180 },
   assignCardActive:{ borderColor: '#1e5fa0', background: '#eff6ff' },
@@ -171,11 +261,14 @@ const styles = {
   assignClass:     { color: '#555', fontSize: 13, marginTop: 2 },
   assignTerm:      { color: '#999', fontSize: 12, marginTop: 2 },
   select:          { padding: '10px 14px', borderRadius: 8, border: '1.5px solid #dde3ea', fontSize: 14, minWidth: 280, background: '#fff' },
-  tableHeader:     { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  tableHeader:     { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16, flexWrap: 'wrap', gap: 8 },
+  badges:          { display: 'flex', gap: 8, flexWrap: 'wrap' },
   totalBadge:      { background: '#eff6ff', color: '#1e5fa0', padding: '4px 12px', borderRadius: 20, fontSize: 13, fontWeight: 600 },
   table:           { width: '100%', borderCollapse: 'collapse', fontSize: 14 },
   th:              { background: '#1e3a5f', color: '#fff', padding: '10px 12px', textAlign: 'center', fontWeight: 600, fontSize: 13 },
   td:              { padding: '8px 12px', textAlign: 'center', borderBottom: '1px solid #f0f4f8' },
-  scoreInput:      { width: 80, padding: '6px 8px', borderRadius: 6, border: '1.5px solid #dde3ea', textAlign: 'center', fontSize: 14 },
-  saveBtn:         { marginTop: 20, padding: '12px 32px', background: '#1e5fa0', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 15, cursor: 'pointer' },
+  scoreInput:      { width: 80, padding: '6px 8px', borderRadius: 6, border: '1.5px solid', textAlign: 'center', fontSize: 14 },
+  saveRow:         { marginTop: 20, display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' },
+  saveBtn:         { padding: '12px 32px', background: '#1e5fa0', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 15, cursor: 'pointer' },
+  warning:         { fontSize: 13, color: '#f59e0b', fontWeight: 600 },
 };

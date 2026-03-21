@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 import com.school.marks.model.Exam;
+import com.school.marks.model.Mark;
 @RestController
 @RequestMapping("/api/teacher")
 @RequiredArgsConstructor
@@ -20,6 +21,7 @@ public class TeacherController {
     private final UserRepository userRepository;
     private final StudentRepository studentRepository;
     private final ExamRepository examRepository;
+    private final MarkRepository markRepository;
 
     @PostMapping("/marks")
     public ResponseEntity<Mark> enterMark(@AuthenticationPrincipal UserDetails ud, @Valid @RequestBody MarkEntryDTO dto) {
@@ -57,4 +59,10 @@ public class TeacherController {
     public ResponseEntity<List<Exam>> getExamsByClass(@PathVariable Long classId) {
         return ResponseEntity.ok(examRepository.findByClassRoom_ClassId(classId));
     }
+    @GetMapping("/marks/{examId}/{subjectId}")
+    public ResponseEntity<List<Mark>> getMarksByExamAndSubject(
+        @PathVariable Long examId,
+        @PathVariable Long subjectId) {
+    return ResponseEntity.ok(markRepository.findByExam_ExamIdAndSubject_SubjectId(examId, subjectId));
+}
 }
