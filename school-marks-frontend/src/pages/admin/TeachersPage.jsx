@@ -1,14 +1,21 @@
 import { useEffect, useState } from 'react';
-import { getTeachers, createTeacher } from '../../api/client';
+import { createTeacher } from '../../api/client';
+import api from '../../api/client';
 import toast from 'react-hot-toast';
 
 export default function TeachersPage() {
-  const [teachers, setTeachers] = useState([]);
-  const [loading, setLoading]   = useState(false);
-  const [showCreds, setShowCreds] = useState(null); // { username, password }
-  const [form, setForm] = useState({ firstName: '', lastName: '', email: '', phone: '', username: '' });
+  const [teachers,  setTeachers]  = useState([]);
+  const [loading,   setLoading]   = useState(false);
+  const [resetting, setResetting] = useState(null);
+  const [toggling,  setToggling]  = useState(null);
+  const [showCreds, setShowCreds] = useState(null);
+  const [form, setForm] = useState({
+    firstName: '', lastName: '', email: '', phone: '', username: ''
+  });
 
-  const load = () => getTeachers().then(r => setTeachers(r.data)).catch(() => toast.error('Failed to load teachers'));
+  const load = () => api.get('/admin/teachers/with-status')
+    .then(r => setTeachers(r.data))
+    .catch(() => toast.error('Failed to load teachers'));
 
   useEffect(() => { load(); }, []);
 
@@ -28,19 +35,61 @@ export default function TeachersPage() {
     }
   };
 
+  const resetPassword = async (teacher) => {
+    if (!window.confirm(`Reset password for ${teacher.firstName} ${teacher.lastName}?`)) return;
+    setResetting(teacher.teacherId);
+    try {
+      const { data } = await api.post(`/admin/teachers/${teacher.teacherId}/reset-password`);
+      setShowCreds({
+        username: data.tempPassword.replace('123', ''),
+        password: data.tempPassword,
+        isReset: true,
+        name: teacher.firstName
+      });
+      toast.success('Password reset');
+    } catch { toast.error('Failed to reset password'); }
+    finally { setResetting(null); }
+  };
+
+  const toggleActive = async (teacher) => {
+    const action = teacher.isActive ? 'deactivate' : 'activate';
+    const msg = teacher.isActive
+      ? `Deactivate ${teacher.firstName}? They will not be able to login.`
+      : `Reactivate ${teacher.firstName}? They will be able to login again.`;
+    if (!window.confirm(msg)) return;
+    setToggling(teacher.teacherId);
+    try {
+      await api.post(`/admin/teachers/${teacher.teacherId}/${action}`);
+      toast.success(`Teacher ${action}d successfully`);
+      load();
+    } catch { toast.error(`Failed to ${action} teacher`); }
+    finally { setToggling(null); }
+  };
+
   return (
     <div>
       <h1 style={s.title}>👩‍🏫 Teachers</h1>
 
       {/* Credentials popup */}
       {showCreds && (
-        <div style={s.credsBox}>
-          <div style={s.credsInner}>
-            <h3 style={{color:'#1e3a5f',marginBottom:12}}>✅ Teacher Created — Share These Credentials</h3>
-            <p style={s.credsText}>Username: <strong>{showCreds.username}</strong></p>
-            <p style={s.credsText}>Password: <strong>{showCreds.password}</strong></p>
-            <p style={{fontSize:12,color:'#e55',marginTop:8}}>⚠️ Teacher must change password on first login</p>
-            <button style={s.closeBtn} onClick={() => setShowCreds(null)}>Close</button>
+        <div style={s.overlay}>
+          <div style={s.modal}>
+            <div style={s.modalIcon}>{showCreds.isReset ? '🔄' : '✅'}</div>
+            <h3 style={s.modalTitle}>
+              {showCreds.isReset ? `Password Reset — ${showCreds.name}` : 'Teacher Created'}
+            </h3>
+            <div style={s.credBox}>
+              <div style={s.credRow}>
+                <span style={s.credLabel}>Username</span>
+                <strong style={s.credValue}>{showCreds.username}</strong>
+              </div>
+              <div style={s.credRow}>
+                <span style={s.credLabel}>Temp Password</span>
+                <strong style={s.credValue}>{showCreds.password}</strong>
+              </div>
+            </div>
+            <p style={s.credNote}>⚠️ Teacher must change password on first login</p>
+            <button style={s.modalBtn} onClick={() => setShowCreds(null)}>Done</button>
           </div>
         </div>
       )}
@@ -51,18 +100,18 @@ export default function TeachersPage() {
         <form onSubmit={submit} style={s.form}>
           <div style={s.grid}>
             {[
-              { key: 'firstName',  label: 'First Name',  placeholder: 'John' },
-              { key: 'lastName',   label: 'Last Name',   placeholder: 'Doe' },
-              { key: 'username',   label: 'Username (login)', placeholder: 'jdoe' },
-              { key: 'email',      label: 'Email',       placeholder: 'jdoe@school.ac.ke' },
-              { key: 'phone',      label: 'Phone',       placeholder: '0712345678' },
+              { key: 'firstName', label: 'First Name',       placeholder: 'John',              req: true },
+              { key: 'lastName',  label: 'Last Name',        placeholder: 'Doe',               req: true },
+              { key: 'username',  label: 'Username (login)', placeholder: 'jdoe',              req: true },
+              { key: 'email',     label: 'Email',            placeholder: 'jdoe@school.ac.ke', req: false },
+              { key: 'phone',     label: 'Phone',            placeholder: '0712345678',        req: false },
             ].map(f => (
               <div key={f.key} style={s.field}>
                 <label style={s.label}>{f.label}</label>
                 <input style={s.input} type="text" placeholder={f.placeholder}
                   value={form[f.key]}
-                  onChange={e => setForm({...form, [f.key]: e.target.value})}
-                  required={['firstName','lastName','username'].includes(f.key)} />
+                  onChange={e => setForm({ ...form, [f.key]: e.target.value })}
+                  required={f.req} />
               </div>
             ))}
           </div>
@@ -81,16 +130,47 @@ export default function TeachersPage() {
           <table style={s.table}>
             <thead>
               <tr>
-                {['ID','Name','Email','Phone'].map(h => <th key={h} style={s.th}>{h}</th>)}
+                {['ID', 'Name', 'Email', 'Phone', 'Status', 'Actions'].map(h => (
+                  <th key={h} style={s.th}>{h}</th>
+                ))}
               </tr>
             </thead>
             <tbody>
               {teachers.map((t, i) => (
-                <tr key={t.teacherId} style={{background: i%2===0?'#f8fafc':'#fff'}}>
+                <tr key={t.teacherId} style={{
+                  background: !t.isActive ? '#fef2f2' : i % 2 === 0 ? '#f8fafc' : '#fff',
+                  opacity: !t.isActive ? 0.8 : 1,
+                }}>
                   <td style={s.td}>{t.teacherId}</td>
-                  <td style={s.td}><strong>{t.firstName} {t.lastName}</strong></td>
+                  <td style={{ ...s.td, textAlign: 'left' }}>
+                    <strong>{t.firstName} {t.lastName}</strong>
+                  </td>
                   <td style={s.td}>{t.email || '—'}</td>
                   <td style={s.td}>{t.phone || '—'}</td>
+                  <td style={s.td}>
+                    <span style={{
+                      ...s.statusBadge,
+                      background: t.isActive ? '#dcfce7' : '#fee2e2',
+                      color: t.isActive ? '#16a34a' : '#dc2626',
+                    }}>
+                      {t.isActive ? '✅ Active' : '🚫 Deactivated'}
+                    </span>
+                  </td>
+                  <td style={{ ...s.td, display: 'flex', gap: 8, justifyContent: 'center' }}>
+                    <button style={s.resetBtn} onClick={() => resetPassword(t)}
+                      disabled={resetting === t.teacherId || !t.isActive}>
+                      {resetting === t.teacherId ? '...' : '🔄 Reset'}
+                    </button>
+                    <button
+                      style={{ ...s.toggleBtn, background: t.isActive ? '#fee2e2' : '#dcfce7',
+                        color: t.isActive ? '#dc2626' : '#16a34a',
+                        borderColor: t.isActive ? '#fca5a5' : '#86efac' }}
+                      onClick={() => toggleActive(t)}
+                      disabled={toggling === t.teacherId}
+                    >
+                      {toggling === t.teacherId ? '...' : t.isActive ? '🚫 Deactivate' : '✅ Activate'}
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -102,21 +182,30 @@ export default function TeachersPage() {
 }
 
 const s = {
-  title:     { fontSize: 24, fontWeight: 700, color: '#1e3a5f', marginBottom: 24 },
-  card:      { background: '#fff', borderRadius: 12, padding: 24, marginBottom: 20, boxShadow: '0 2px 12px rgba(0,0,0,.06)' },
-  cardTitle: { fontSize: 15, fontWeight: 700, color: '#1e3a5f', marginBottom: 16 },
-  form:      { display: 'flex', flexDirection: 'column', gap: 16 },
-  grid:      { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px,1fr))', gap: 14 },
-  field:     { display: 'flex', flexDirection: 'column', gap: 4 },
-  label:     { fontSize: 13, fontWeight: 600, color: '#555' },
-  input:     { padding: '9px 12px', borderRadius: 8, border: '1.5px solid #dde3ea', fontSize: 14 },
-  btn:       { padding: '11px 28px', background: '#1e5fa0', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, cursor: 'pointer', fontSize: 14, alignSelf: 'flex-start' },
-  table:     { width: '100%', borderCollapse: 'collapse', fontSize: 14 },
-  th:        { background: '#1e3a5f', color: '#fff', padding: '10px 14px', textAlign: 'left', fontWeight: 600 },
-  td:        { padding: '10px 14px', borderBottom: '1px solid #f0f4f8' },
-  empty:     { color: '#aaa', textAlign: 'center', padding: 32 },
-  credsBox:  { position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 },
-  credsInner:{ background: '#fff', borderRadius: 14, padding: 32, minWidth: 340, boxShadow: '0 20px 60px rgba(0,0,0,.2)' },
-  credsText: { fontSize: 16, marginBottom: 6, color: '#333' },
-  closeBtn:  { marginTop: 16, padding: '10px 28px', background: '#1e5fa0', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, cursor: 'pointer' },
+  title:       { fontSize: 24, fontWeight: 700, color: '#1e3a5f', marginBottom: 24 },
+  card:        { background: '#fff', borderRadius: 12, padding: 24, marginBottom: 20, boxShadow: '0 2px 12px rgba(0,0,0,.06)' },
+  cardTitle:   { fontSize: 15, fontWeight: 700, color: '#1e3a5f', marginBottom: 16 },
+  form:        { display: 'flex', flexDirection: 'column', gap: 16 },
+  grid:        { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px,1fr))', gap: 14 },
+  field:       { display: 'flex', flexDirection: 'column', gap: 4 },
+  label:       { fontSize: 13, fontWeight: 600, color: '#555' },
+  input:       { padding: '9px 12px', borderRadius: 8, border: '1.5px solid #dde3ea', fontSize: 14 },
+  btn:         { padding: '11px 28px', background: '#1e5fa0', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, cursor: 'pointer', fontSize: 14, alignSelf: 'flex-start' },
+  resetBtn:    { padding: '6px 12px', background: '#fef3c7', color: '#92400e', border: '1.5px solid #fcd34d', borderRadius: 6, cursor: 'pointer', fontWeight: 600, fontSize: 12 },
+  toggleBtn:   { padding: '6px 12px', border: '1.5px solid', borderRadius: 6, cursor: 'pointer', fontWeight: 600, fontSize: 12 },
+  statusBadge: { padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600 },
+  table:       { width: '100%', borderCollapse: 'collapse', fontSize: 14 },
+  th:          { background: '#1e3a5f', color: '#fff', padding: '10px 14px', textAlign: 'center', fontWeight: 600 },
+  td:          { padding: '10px 14px', textAlign: 'center', borderBottom: '1px solid #f0f4f8' },
+  empty:       { color: '#aaa', textAlign: 'center', padding: 32 },
+  overlay:     { position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 },
+  modal:       { background: '#fff', borderRadius: 16, padding: 36, minWidth: 360, boxShadow: '0 20px 60px rgba(0,0,0,.2)', textAlign: 'center' },
+  modalIcon:   { fontSize: 40, marginBottom: 12 },
+  modalTitle:  { fontSize: 18, fontWeight: 700, color: '#1e3a5f', marginBottom: 20 },
+  credBox:     { background: '#f8fafc', borderRadius: 10, padding: '16px 20px', marginBottom: 12, textAlign: 'left' },
+  credRow:     { display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #e2e8f0' },
+  credLabel:   { fontSize: 13, color: '#888' },
+  credValue:   { fontSize: 14, color: '#1e3a5f' },
+  credNote:    { fontSize: 12, color: '#e55', marginBottom: 16 },
+  modalBtn:    { padding: '10px 32px', background: '#1e5fa0', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, cursor: 'pointer' },
 };

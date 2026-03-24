@@ -44,6 +44,7 @@ com\school\marks\controller\ReportController.class
 com\school\marks\repository\ExamRepository.class
 com\school\marks\SchoolMarksApplication.class
 com\school\marks\controller\AuthController.class
+com\school\marks\security\LoginRateLimitFilter.class
 com\school\marks\dto\SubjectMarkDTO$SubjectMarkDTOBuilder.class
 com\school\marks\model\User$Role.class
 com\school\marks\repository\AuditLogRepository.class

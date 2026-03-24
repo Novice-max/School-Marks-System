@@ -1,6 +1,7 @@
 package com.school.marks.config;
 
 import com.school.marks.security.JwtFilter;
+import com.school.marks.security.LoginRateLimitFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
@@ -26,11 +27,14 @@ public class SecurityConfig {
 
     private final JwtFilter jwtFilter;
     private final UserDetailsService userDetailsService;
+    private final LoginRateLimitFilter loginRateLimitFilter;
 
     public SecurityConfig(@Lazy JwtFilter jwtFilter,
-                          @Lazy UserDetailsService userDetailsService) {
-        this.jwtFilter = jwtFilter;
-        this.userDetailsService = userDetailsService;
+                          @Lazy UserDetailsService userDetailsService,
+                          LoginRateLimitFilter loginRateLimitFilter) {
+        this.jwtFilter            = jwtFilter;
+        this.userDetailsService   = userDetailsService;
+        this.loginRateLimitFilter = loginRateLimitFilter;
     }
 
     @Bean
@@ -48,6 +52,8 @@ public class SecurityConfig {
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             )
             .authenticationProvider(authenticationProvider())
+            // Rate limit runs BEFORE JWT check
+            .addFilterBefore(loginRateLimitFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

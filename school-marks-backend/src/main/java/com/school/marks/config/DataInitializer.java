@@ -62,6 +62,7 @@ public class DataInitializer implements CommandLineRunner {
             Subject.builder().subjectName("Creative Arts").levelType("lower_primary").build(),
             Subject.builder().subjectName("Physical & Health Education").levelType("lower_primary").build(),
             Subject.builder().subjectName("Religious Education").levelType("lower_primary").build(),
+            Subject.builder().subjectName("French").levelType("lower_primary").build(),
 
             // Upper Primary (Grade 4–6)
             Subject.builder().subjectName("English").levelType("upper_primary").build(),
@@ -72,6 +73,7 @@ public class DataInitializer implements CommandLineRunner {
             Subject.builder().subjectName("Creative Arts").levelType("upper_primary").build(),
             Subject.builder().subjectName("Physical & Health Education").levelType("upper_primary").build(),
             Subject.builder().subjectName("Religious Education").levelType("upper_primary").build(),
+            Subject.builder().subjectName("French").levelType("upper_primary").build(),
 
             // Junior Secondary (Grade 7–9)
             Subject.builder().subjectName("English").levelType("junior_secondary").build(),
@@ -84,7 +86,8 @@ public class DataInitializer implements CommandLineRunner {
             Subject.builder().subjectName("Agriculture").levelType("junior_secondary").build(),
             Subject.builder().subjectName("Life Skills").levelType("junior_secondary").build(),
             Subject.builder().subjectName("Creative Arts & Sports").levelType("junior_secondary").build(),
-            Subject.builder().subjectName("Pre-Technical Studies").levelType("junior_secondary").build()
+            Subject.builder().subjectName("Pre-Technical Studies").levelType("junior_secondary").build(),
+            Subject.builder().subjectName("French").levelType("junior_secondary").build()
         );
 
         subjectRepository.saveAll(subjects);

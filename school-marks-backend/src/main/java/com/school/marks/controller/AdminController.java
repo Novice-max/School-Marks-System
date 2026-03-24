@@ -7,6 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
+import org.springframework.security.crypto.password.PasswordEncoder;
 @RestController
 @RequestMapping("/api/admin")
 @RequiredArgsConstructor
@@ -18,6 +19,8 @@ public class AdminController {
     private final ExamRepository examRepository;
     private final TeacherSubjectAssignmentRepository assignmentRepository;
     private final AuthService authService;
+    private final PasswordEncoder passwordEncoder;
+    private final UserRepository userRepository;
 
     @GetMapping("/teachers")
     public ResponseEntity<List<Teacher>> getAllTeachers() { return ResponseEntity.ok(teacherRepository.findAll()); }
@@ -129,5 +132,57 @@ public class AdminController {
     public ResponseEntity<String> removeAssignment(@PathVariable Long assignmentId) {
         assignmentRepository.deleteById(assignmentId);
         return ResponseEntity.ok("Assignment removed");
+    }
+    @PostMapping("/teachers/{teacherId}/reset-password")
+    public ResponseEntity<Map<String, String>> resetTeacherPassword(@PathVariable Long teacherId) {
+        Teacher teacher = teacherRepository.findById(teacherId)
+            .orElseThrow(() -> new RuntimeException("Teacher not found"));
+
+        User user = userRepository.findByTeacher_TeacherId(teacherId)
+            .orElseThrow(() -> new RuntimeException("User account not found"));
+
+        String newPassword = user.getUsername() + "123";
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
+        user.setIsFirstLogin(true);
+        userRepository.save(user);
+
+        return ResponseEntity.ok(Map.of(
+                "message", "Password reset successfully",
+                "tempPassword", newPassword
+        ));
+    }
+    @PostMapping("/teachers/{teacherId}/deactivate")
+    public ResponseEntity<String> deactivateTeacher(@PathVariable Long teacherId) {
+        User user = userRepository.findByTeacher_TeacherId(teacherId)
+                .orElseThrow(() -> new RuntimeException("User account not found"));
+        user.setIsActive(false);
+        userRepository.save(user);
+        return ResponseEntity.ok("Teacher deactivated");
+    }
+
+    @PostMapping("/teachers/{teacherId}/activate")
+    public ResponseEntity<String> activateTeacher(@PathVariable Long teacherId) {
+        User user = userRepository.findByTeacher_TeacherId(teacherId)
+                .orElseThrow(() -> new RuntimeException("User account not found"));
+        user.setIsActive(true);
+        userRepository.save(user);
+        return ResponseEntity.ok("Teacher activated");
+    }
+    @GetMapping("/teachers/with-status")
+    public ResponseEntity<List<Map<String, Object>>> getTeachersWithStatus() {
+        List<Teacher> teachers = teacherRepository.findAll();
+        List<Map<String, Object>> result = teachers.stream().map(t -> {
+            Map<String, Object> map = new java.util.HashMap<>();
+            map.put("teacherId", t.getTeacherId());
+            map.put("firstName", t.getFirstName());
+            map.put("lastName", t.getLastName());
+            map.put("email", t.getEmail());
+            map.put("phone", t.getPhone());
+            userRepository.findByTeacher_TeacherId(t.getTeacherId())
+                .ifPresent(u -> map.put("isActive", u.getIsActive()));
+            if (!map.containsKey("isActive")) map.put("isActive", true);
+            return map;
+        }).collect(java.util.stream.Collectors.toList());
+        return ResponseEntity.ok(result);
     }
 }
