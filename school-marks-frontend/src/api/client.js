@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: 'https://school-marks-system-production.up.railway.app/api',
   headers: { 'Content-Type': 'application/json' },
 });
 
