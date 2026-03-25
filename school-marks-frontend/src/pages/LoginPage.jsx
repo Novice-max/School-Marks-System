@@ -45,8 +45,8 @@ export default function LoginPage() {
     <div style={s.wrapper}>
       <div style={s.card}>
         {/* School logo */}
-        <img src="/school_logo.png" alt="Santa Ana Academy" style={s.logo} />
-        <h1 style={s.school}>Santa Ana Academy</h1>
+        <img src="school-marks-frontend\public\new logo.jpeg" alt="Santa Ana Calm Waters Academy" style={s.logo} />
+        <h1 style={s.school}>Santa Ana Calm Waters Academy</h1>
         <p style={s.system}>Student Management System</p>
 
         {expired && (
