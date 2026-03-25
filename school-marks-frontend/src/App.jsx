@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
+import { useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Layout from './components/Layout';
 import TeacherDashboard from './pages/teacher/TeacherDashboard';
@@ -33,6 +34,17 @@ function PrivateRoute({ children, role }) {
 
 function AppRoutes() {
   const { user } = useAuth();
+
+  // Keep Railway backend alive — prevents cold start delays on login
+  useEffect(() => {
+    const ping = () =>
+      fetch('https://school-marks-system-production.up.railway.app/actuator/health')
+        .catch(() => {});
+    ping();
+    const interval = setInterval(ping, 10 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <Routes>
       <Route path="/login" element={user ? <Navigate to={user.role === 'ADMIN' ? '/admin' : '/teacher'} /> : <LoginPage />} />
