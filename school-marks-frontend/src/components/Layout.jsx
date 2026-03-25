@@ -31,7 +31,7 @@ export default function Layout({ children }) {
       <aside style={s.sidebar}>
         {/* Logo + School name */}
         <div style={s.brand}>
-          <img src="/school_logo.png" alt="Logo" style={s.logo} />
+          <img src="/new logo.jpeg" alt="Logo" style={s.logo} />
           <div>
             <div style={s.brandName}>Santa Ana</div>
             <div style={s.brandSub}>Academy</div>
