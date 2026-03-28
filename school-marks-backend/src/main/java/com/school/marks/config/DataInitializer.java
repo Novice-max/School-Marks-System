@@ -48,46 +48,49 @@ public class DataInitializer implements CommandLineRunner {
     }
 
     // ─────────────────────────────────────────────
-    // CBC SUBJECTS — seeded once
+    // CBC SUBJECTS — seeded once, matching physical report cards
     // ─────────────────────────────────────────────
     private void seedSubjects() {
         if (subjectRepository.count() > 0) return;
 
         List<Subject> subjects = List.of(
-            // Lower Primary (Grade 1–3)
-            Subject.builder().subjectName("English").levelType("lower_primary").build(),
-            Subject.builder().subjectName("Kiswahili").levelType("lower_primary").build(),
-            Subject.builder().subjectName("Mathematics").levelType("lower_primary").build(),
-            Subject.builder().subjectName("Environmental Activities").levelType("lower_primary").build(),
-            Subject.builder().subjectName("Creative Arts").levelType("lower_primary").build(),
-            Subject.builder().subjectName("Physical & Health Education").levelType("lower_primary").build(),
-            Subject.builder().subjectName("Religious Education").levelType("lower_primary").build(),
-            Subject.builder().subjectName("French").levelType("lower_primary").build(),
 
-            // Upper Primary (Grade 4–6)
+            // ── Lower Primary (Grade 1–3) ──
+            Subject.builder().subjectName("English Language").levelType("lower_primary").build(),
+            Subject.builder().subjectName("Reading").levelType("lower_primary").build(),
+            Subject.builder().subjectName("Language Total").levelType("lower_primary").build(),
+            Subject.builder().subjectName("Kiswahili Lugha").levelType("lower_primary").build(),
+            Subject.builder().subjectName("Kusoma").levelType("lower_primary").build(),
+            Subject.builder().subjectName("Kiswahili Jumla").levelType("lower_primary").build(),
+            Subject.builder().subjectName("Mathematical Activities").levelType("lower_primary").build(),
+            Subject.builder().subjectName("Creative Activities").levelType("lower_primary").build(),
+            Subject.builder().subjectName("Environmental Activities").levelType("lower_primary").build(),
+            Subject.builder().subjectName("Religious Education").levelType("lower_primary").build(),
+
+            // ── Upper Primary (Grade 4–6) ──
             Subject.builder().subjectName("English").levelType("upper_primary").build(),
             Subject.builder().subjectName("Kiswahili").levelType("upper_primary").build(),
             Subject.builder().subjectName("Mathematics").levelType("upper_primary").build(),
-            Subject.builder().subjectName("Science & Technology").levelType("upper_primary").build(),
+            Subject.builder().subjectName("Science and Technology").levelType("upper_primary").build(),
+            Subject.builder().subjectName("Agriculture").levelType("upper_primary").build(),
             Subject.builder().subjectName("Social Studies").levelType("upper_primary").build(),
-            Subject.builder().subjectName("Creative Arts").levelType("upper_primary").build(),
-            Subject.builder().subjectName("Physical & Health Education").levelType("upper_primary").build(),
-            Subject.builder().subjectName("Religious Education").levelType("upper_primary").build(),
-            Subject.builder().subjectName("French").levelType("upper_primary").build(),
+            Subject.builder().subjectName("Religious Activities").levelType("upper_primary").build(),
+            Subject.builder().subjectName("Creative Arts & Sports").levelType("upper_primary").build(),
+            Subject.builder().subjectName("French Language").levelType("upper_primary").build(),
+            Subject.builder().subjectName("Computer Studies").levelType("upper_primary").build(),
 
-            // Junior Secondary (Grade 7–9)
+            // ── Junior Secondary (Grade 7–9) ──
             Subject.builder().subjectName("English").levelType("junior_secondary").build(),
             Subject.builder().subjectName("Kiswahili").levelType("junior_secondary").build(),
             Subject.builder().subjectName("Mathematics").levelType("junior_secondary").build(),
             Subject.builder().subjectName("Integrated Science").levelType("junior_secondary").build(),
-            Subject.builder().subjectName("Social Studies").levelType("junior_secondary").build(),
-            Subject.builder().subjectName("Religious Education").levelType("junior_secondary").build(),
-            Subject.builder().subjectName("Business Studies").levelType("junior_secondary").build(),
             Subject.builder().subjectName("Agriculture").levelType("junior_secondary").build(),
-            Subject.builder().subjectName("Life Skills").levelType("junior_secondary").build(),
+            Subject.builder().subjectName("Social Studies").levelType("junior_secondary").build(),
+            Subject.builder().subjectName("Religious Activities").levelType("junior_secondary").build(),
+            Subject.builder().subjectName("Pre-Technical Activities").levelType("junior_secondary").build(),
             Subject.builder().subjectName("Creative Arts & Sports").levelType("junior_secondary").build(),
-            Subject.builder().subjectName("Pre-Technical Studies").levelType("junior_secondary").build(),
-            Subject.builder().subjectName("French").levelType("junior_secondary").build()
+            Subject.builder().subjectName("French Language").levelType("junior_secondary").build(),
+            Subject.builder().subjectName("Computer Studies").levelType("junior_secondary").build()
         );
 
         subjectRepository.saveAll(subjects);
