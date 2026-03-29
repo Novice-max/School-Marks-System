@@ -3,6 +3,11 @@ import { getClasses, getExams, createExam } from '../../api/client';
 import toast from 'react-hot-toast';
 
 const EXAM_NAMES = ['Opener', 'Mid-Term', 'End-Term'];
+const classLabel = c =>
+  c.gradeLevel === -1 ? 'PP1 (Pre-Primary 1)' :
+  c.gradeLevel === 0  ? 'PP2 (Pre-Primary 2)' :
+  c.gradeLevel <= 6   ? `Grade ${c.gradeLevel} (Primary)` :
+                        `Grade ${c.gradeLevel} (JSS)`;
 
 export default function ExamsPage() {
   const [classes, setClasses] = useState([]);
@@ -19,8 +24,6 @@ export default function ExamsPage() {
     getClasses().then(r => setClasses(r.data));
     load();
   }, []);
-
-  const classLabel = c => c.gradeLevel <= 6 ? `Grade ${c.gradeLevel} (Primary)` : `Grade ${c.gradeLevel} (JSS)`;
 
   const submit = async (e) => {
     e.preventDefault();

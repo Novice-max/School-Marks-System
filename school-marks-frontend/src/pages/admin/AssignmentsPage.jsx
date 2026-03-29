@@ -3,6 +3,12 @@ import { getTeachers, getClasses, getSubjects, assignTeacher,
          getAssignmentsByTeacher, removeAssignment } from '../../api/client';
 import toast from 'react-hot-toast';
 
+const classLabel = c =>
+  c.gradeLevel === -1 ? 'PP1 (Pre-Primary 1)' :
+  c.gradeLevel === 0  ? 'PP2 (Pre-Primary 2)' :
+  c.gradeLevel <= 6   ? `Grade ${c.gradeLevel} (Primary)` :
+                        `Grade ${c.gradeLevel} (JSS)`;
+
 export default function AssignmentsPage() {
   const [teachers,     setTeachers]     = useState([]);
   const [classes,      setClasses]      = useState([]);
@@ -26,9 +32,6 @@ export default function AssignmentsPage() {
     getAssignmentsByTeacher(selTeacher).then(r => setAssignments(r.data));
   }, [selTeacher]);
 
-  const classLabel = c => c.gradeLevel <= 6 ? `Grade ${c.gradeLevel} (Primary)` : `Grade ${c.gradeLevel} (JSS)`;
-
-  // Filter subjects by selected class level
   const filteredSubjects = () => {
     if (!form.classId) return subjects;
     const cls = classes.find(c => c.classId == form.classId);
@@ -71,7 +74,6 @@ export default function AssignmentsPage() {
     <div>
       <h1 style={s.title}>🔗 Teacher Assignments</h1>
 
-      {/* Select teacher */}
       <div style={s.card}>
         <h3 style={s.cardTitle}>Select Teacher</h3>
         <select style={s.input} value={selTeacher}
@@ -85,7 +87,6 @@ export default function AssignmentsPage() {
         </select>
       </div>
 
-      {/* Assign form */}
       {selTeacher && (
         <div style={s.card}>
           <h3 style={s.cardTitle}>Assign Subject to Teacher</h3>
@@ -133,7 +134,6 @@ export default function AssignmentsPage() {
         </div>
       )}
 
-      {/* Current assignments */}
       {selTeacher && (
         <div style={s.card}>
           <h3 style={s.cardTitle}>

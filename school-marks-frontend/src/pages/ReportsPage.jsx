@@ -11,6 +11,12 @@ function savePdf(blob, filename) {
   URL.revokeObjectURL(url);
 }
 
+const classLabel = c =>
+  c.gradeLevel === -1 ? 'PP1 (Pre-Primary 1)' :
+  c.gradeLevel === 0  ? 'PP2 (Pre-Primary 2)' :
+  c.gradeLevel <= 6   ? `Grade ${c.gradeLevel} (Primary)` :
+                        `Grade ${c.gradeLevel} (JSS)`;
+
 export default function ReportsPage() {
   const { user } = useAuth();
   const isAdmin  = user?.role === 'ADMIN';
@@ -23,10 +29,9 @@ export default function ReportsPage() {
   const [selStudent, setSelStudent] = useState('');
   const [loading,    setLoading]    = useState('');
 
-  // School-wide report state
-  const [schoolYear,  setSchoolYear]  = useState(new Date().getFullYear().toString());
-  const [schoolTerm,  setSchoolTerm]  = useState('1');
-  const [schoolExam,  setSchoolExam]  = useState('Opener');
+  const [schoolYear, setSchoolYear] = useState(new Date().getFullYear().toString());
+  const [schoolTerm, setSchoolTerm] = useState('1');
+  const [schoolExam, setSchoolExam] = useState('Opener');
 
   useEffect(() => {
     if (isAdmin) {
@@ -56,8 +61,6 @@ export default function ReportsPage() {
     const studEndpoint = isAdmin ? `/admin/students/class/${selClass}` : `/teacher/students/class/${selClass}`;
     api.get(studEndpoint).then(r => setStudents(r.data));
   }, [selClass, isAdmin]);
-
-  const classLabel = c => c.gradeLevel <= 6 ? `Grade ${c.gradeLevel} (Primary)` : `Grade ${c.gradeLevel} (JSS)`;
 
   const dlMarklist = async () => {
     if (!selExam) { toast.error('Select an exam'); return; }
@@ -162,7 +165,7 @@ export default function ReportsPage() {
           <div style={{ ...s.card, borderTop: '4px solid #7c3aed' }}>
             <div style={s.cardIcon}>🏫</div>
             <h3 style={s.cardTitle}>School-Wide Report</h3>
-            <p style={s.cardDesc}>Complete report for all classes (Grade 1–9) for a given exam period</p>
+            <p style={s.cardDesc}>Complete report for all classes (PP1–Grade 9) for a given exam period</p>
 
             <label style={s.label}>Academic Year</label>
             <input style={s.select} type="text" value={schoolYear}
@@ -203,4 +206,3 @@ const s = {
   select:    { padding: '9px 12px', borderRadius: 8, border: '1.5px solid #dde3ea', fontSize: 13, background: '#fff' },
   btn:       { marginTop: 8, padding: '11px', background: '#1e5fa0', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, cursor: 'pointer', fontSize: 14 },
 };
-
