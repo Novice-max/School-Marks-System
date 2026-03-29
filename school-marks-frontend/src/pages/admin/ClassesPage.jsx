@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react';
 import { getClasses, createClass } from '../../api/client';
 import toast from 'react-hot-toast';
 
-const GRADES = [1,2,3,4,5,6,7,8,9];
-const LEVEL  = g => g <= 3 ? 'lower_primary' : g <= 6 ? 'upper_primary' : 'junior_secondary';
-const LABEL  = g => g <= 6 ? `Grade ${g} (Primary)` : `Grade ${g} (JSS)`;
+const GRADES = [-1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+const LEVEL  = g => g < 1 ? 'pre_primary' : g <= 3 ? 'lower_primary' : g <= 6 ? 'upper_primary' : 'junior_secondary';
+const LABEL  = g => g === -1 ? 'PP1 (Pre-Primary 1)' : g === 0 ? 'PP2 (Pre-Primary 2)' : g <= 6 ? `Grade ${g} (Primary)` : `Grade ${g} (JSS)`;
 
 export default function ClassesPage() {
   const [classes, setClasses]   = useState([]);
@@ -92,7 +92,10 @@ export default function ClassesPage() {
   );
 }
 
-const badgeColor = t => t === 'lower_primary' ? '#dcfce7' : t === 'upper_primary' ? '#dbeafe' : '#f3e8ff';
+const badgeColor = t =>
+  t === 'pre_primary'    ? '#fef9c3' :
+  t === 'lower_primary'  ? '#dcfce7' :
+  t === 'upper_primary'  ? '#dbeafe' : '#f3e8ff';
 
 const s = {
   title:     { fontSize: 24, fontWeight: 700, color: '#1e3a5f', marginBottom: 24 },
