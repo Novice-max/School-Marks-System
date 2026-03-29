@@ -2,6 +2,12 @@ import { useEffect, useState } from 'react';
 import { getClasses, getStudentsByClass, createStudent } from '../../api/client';
 import toast from 'react-hot-toast';
 
+const classLabel = (c) =>
+  c.gradeLevel === -1 ? `PP1 (Pre-Primary 1) — ${c.academicYear}` :
+  c.gradeLevel === 0  ? `PP2 (Pre-Primary 2) — ${c.academicYear}` :
+  c.gradeLevel <= 6   ? `Grade ${c.gradeLevel} (Primary) — ${c.academicYear}` :
+                        `Grade ${c.gradeLevel} (JSS) — ${c.academicYear}`;
+
 export default function StudentsPage() {
   const [classes,  setClasses]  = useState([]);
   const [students, setStudents] = useState([]);
@@ -18,8 +24,6 @@ export default function StudentsPage() {
     if (!selClass) return;
     getStudentsByClass(selClass).then(r => setStudents(r.data));
   }, [selClass]);
-
-  const classLabel = (c) => c.gradeLevel <= 6 ? `Grade ${c.gradeLevel} (Primary)` : `Grade ${c.gradeLevel} (JSS)`;
 
   const submit = async (e) => {
     e.preventDefault();
@@ -51,9 +55,7 @@ export default function StudentsPage() {
         <select style={s.input} value={selClass} onChange={e => setSelClass(e.target.value)}>
           <option value="">— Choose a class —</option>
           {classes.map(c => (
-            <option key={c.classId} value={c.classId}>
-              {classLabel(c)} — {c.academicYear}
-            </option>
+            <option key={c.classId} value={c.classId}>{classLabel(c)}</option>
           ))}
         </select>
         {classes.length === 0 && <p style={{color:'#e55',fontSize:13,marginTop:8}}>⚠️ No classes found. Create classes first.</p>}
@@ -66,11 +68,11 @@ export default function StudentsPage() {
           <form onSubmit={submit} style={s.form}>
             <div style={s.grid}>
               {[
-                { key: 'firstName',       label: 'First Name',       type: 'text',   req: true },
-                { key: 'lastName',        label: 'Last Name',        type: 'text',   req: true },
-                { key: 'admissionNumber', label: 'Admission No.',    type: 'text',   req: true },
-                { key: 'parentContact',   label: 'Parent Contact',   type: 'text',   req: false },
-                { key: 'dateOfBirth',     label: 'Date of Birth',    type: 'date',   req: false },
+                { key: 'firstName',       label: 'First Name',       type: 'text', req: true },
+                { key: 'lastName',        label: 'Last Name',        type: 'text', req: true },
+                { key: 'admissionNumber', label: 'Admission No.',    type: 'text', req: true },
+                { key: 'parentContact',   label: 'Parent Contact',   type: 'text', req: false },
+                { key: 'dateOfBirth',     label: 'Date of Birth',    type: 'date', req: false },
               ].map(f => (
                 <div key={f.key} style={s.field}>
                   <label style={s.label}>{f.label}</label>

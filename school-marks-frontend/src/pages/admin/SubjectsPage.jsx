@@ -7,8 +7,9 @@ export default function SubjectsPage() {
   useEffect(() => { getSubjects().then(r => setSubjects(r.data)); }, []);
 
   const levels = [
-    { key: 'lower_primary',    label: '📗 Lower Primary (Grade 1–3)',    color: '#dcfce7', border: '#16a34a' },
-    { key: 'upper_primary',    label: '📘 Upper Primary (Grade 4–6)',    color: '#dbeafe', border: '#2563eb' },
+    { key: 'pre_primary',      label: '🟡 Pre-Primary (PP1 & PP2)',      color: '#fef9c3', border: '#ca8a04' },
+    { key: 'lower_primary',    label: '📗 Lower Primary (Grade 1–3)',     color: '#dcfce7', border: '#16a34a' },
+    { key: 'upper_primary',    label: '📘 Upper Primary (Grade 4–6)',     color: '#dbeafe', border: '#2563eb' },
     { key: 'junior_secondary', label: '📙 Junior Secondary (Grade 7–9)', color: '#f3e8ff', border: '#7c3aed' },
   ];
 
