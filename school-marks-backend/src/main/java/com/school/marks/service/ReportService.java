@@ -216,6 +216,15 @@ public class ReportService {
                 .setBorder(new SolidBorder(ColorConstants.BLACK, 1.5f))
                 .setPadding(5).setMarginTop(8));
 
+        // ── 2b. LEVEL LABEL (e.g. PRE-PRIMARY TWO) ──
+        String levelLabel = getLevelLabel(exam.getClassRoom().getGradeLevel());
+        if (!levelLabel.isEmpty()) {
+            doc.add(new Paragraph(levelLabel)
+                    .setFont(bold).setFontSize(10)
+                    .setTextAlignment(TextAlignment.CENTER)
+                    .setMarginTop(2));
+        }
+
         // ── 3. LEARNER NAME + GRADE ──
         Table nameGrade = new Table(UnitValue.createPercentArray(new float[]{70, 30}))
                 .setWidth(UnitValue.createPercentValue(100)).setMarginTop(8);
@@ -382,9 +391,10 @@ public class ReportService {
         }
         doc.add(rubric);
 
-        // ── 6. FACILITATOR'S COMMENT ──
-        doc.add(new Paragraph(
-                "FACILITATOR'S COMMENT:  __________________________________________________________________")
+        // ── 6. AUTO-GENERATED FACILITATOR'S COMMENT ──
+        String autoComment = generateFacilitatorComment(
+                student.getFirstName(), avgLevel, exam.getClassRoom().getGradeLevel());
+        doc.add(new Paragraph("FACILITATOR'S COMMENT:  " + autoComment)
                 .setFont(regular).setFontSize(9).setMarginTop(12));
 
         // ── 7. SIGNATURES ──
@@ -593,4 +603,28 @@ public class ReportService {
         if (grade.startsWith("BE")) return BE_COLOR;
         return new DeviceRgb(0, 0, 0);
     }
+
+    /** Returns display label for pre-primary levels */
+    private String getLevelLabel(int gradeLevel) {
+        if (gradeLevel == -1) return "PRE-PRIMARY ONE (PP1)";
+        if (gradeLevel == 0)  return "PRE-PRIMARY TWO (PP2)";
+        return "";
+    }
+
+    /** Auto-generates a relevant facilitator comment based on grade and level */
+    private String generateFacilitatorComment(String firstName, String detailedGrade, int gradeLevel) {
+        String name = firstName != null ? firstName : "The learner";
+        return switch (detailedGrade) {
+            case "EE1" -> name + " has demonstrated exceptional mastery this term. Outstanding performance — keep reaching higher!";
+            case "EE2" -> name + " has excelled this term and shows strong understanding. Maintain this excellent effort.";
+            case "ME1" -> name + " has met expectations with commendable performance. A little more effort will take you to excellence.";
+            case "ME2" -> name + " has met expectations this term. Encourage continued practice to improve further.";
+            case "AE1" -> name + " is approaching expectations. With more dedication and revision, improvement is very achievable.";
+            case "AE2" -> name + " is working towards expectations. Additional support and practice at home is recommended.";
+            case "BE1" -> name + " requires significant support this term. Please engage closely with the class teacher for an improvement plan.";
+            case "BE2" -> name + " needs urgent academic intervention. Regular revision and parental support are strongly advised.";
+            default    -> name + " has completed the term. Continued effort and dedication will lead to improvement.";
+        };
+    }
+
 }
