@@ -44,15 +44,14 @@ export default function LoginPage() {
 
   return (
     <div style={s.wrapper}>
-      {/* Wavy framed card */}
       <div style={s.wavyOuter}>
         <svg style={s.wavySvg} viewBox="0 0 420 560" preserveAspectRatio="none">
           <defs>
-            <filter id="wavyShadow" x="-20%" y="-20%" width="140%" height="140%">
-              <feDropShadow dx="0" dy="8" stdDeviation="16" floodColor="rgba(0,0,0,0.25)" />
+            <filter id="cardShadow" x="-10%" y="-10%" width="120%" height="120%">
+              <feDropShadow dx="0" dy="6" stdDeviation="12" floodColor="rgba(0,0,0,0.2)" />
             </filter>
           </defs>
-          <path d={wavyPath} fill="#fff" filter="url(#wavyShadow)" />
+          <path d={wavyPath} fill="#fff" filter="url(#cardShadow)" />
         </svg>
         <div style={s.cardContent}>
           <img src="/new logo.jpeg" alt="Calm Waters Academy" style={s.logo} />
@@ -92,7 +91,6 @@ export default function LoginPage() {
                   aria-label={showPass ? 'Hide password' : 'Show password'}
                 >
                   {showPass ? (
-                    /* Eye-off icon */
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94" />
                       <path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19" />
@@ -100,7 +98,6 @@ export default function LoginPage() {
                       <line x1="1" y1="1" x2="23" y2="23" />
                     </svg>
                   ) : (
-                    /* Eye icon */
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
                       <circle cx="12" cy="12" r="3" />
@@ -122,27 +119,24 @@ export default function LoginPage() {
   );
 }
 
-/* Wavy border path — organic curves instead of a straight rectangle */
+/*
+  Gentle wavy path — edges drift only ~3-4px from a straight line.
+  Looks like soft water ripples, not jagged or dramatic.
+*/
 const wavyPath = `
-  M 20,12
-  C 60,-4 100,8 140,6
-  S 220,-6 260,8
-  S 340,-2 380,6
-  Q 410,10 414,40
-  C 418,80 408,120 412,160
-  S 418,240 412,280
-  S 406,360 412,400
-  Q 416,440 410,480
-  C 406,520 414,540 400,552
-  Q 380,562 340,554
-  C 300,560 260,548 220,554
-  S 140,562 100,554
-  S 40,560 20,552
-  Q 4,544 6,500
-  C 10,460 2,420 6,380
-  S 12,280 6,240
-  S 2,160 6,120
-  Q 8,60 10,40
+  M 14,8
+  Q 105,5  210,8
+  Q 315,5  406,8
+  Q 416,10 416,20
+  Q 418,140 414,280
+  Q 416,420 416,540
+  Q 416,554 406,556
+  Q 315,559 210,556
+  Q 105,559 14,556
+  Q 4,554  4,540
+  Q 2,420  6,280
+  Q 4,140  4,20
+  Q 4,10   14,8
   Z
 `;
 
