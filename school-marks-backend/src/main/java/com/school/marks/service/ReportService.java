@@ -414,7 +414,7 @@ public class ReportService {
                 .add(new Paragraph("________________________________").setFont(regular).setFontSize(9))
                 .setBorder(Border.NO_BORDER));
         sigTable.addCell(new Cell()
-                .add(new Paragraph("SIGNATURE:").setFont(bold).setFontSize(8))
+                .add(new Paragraph("CLASS TEACHER'S SIGNATURE:").setFont(bold).setFontSize(8))
                 .add(new Paragraph("______________________").setFont(regular).setFontSize(9))
                 .setBorder(Border.NO_BORDER));
         sigTable.addCell(new Cell()
