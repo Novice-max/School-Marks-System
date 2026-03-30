@@ -172,18 +172,21 @@ public class ReportService {
                 addMarkCell(marksTable, scoreStr, regular, bodyF,     rowBg, TextAlignment.CENTER, rowH);
                 addMarkCell(marksTable, level,    bold,    bodyF - 1, rowBg, TextAlignment.CENTER, rowH);
                 addMarkCell(marksTable, "",        regular, bodyF,    rowBg, TextAlignment.CENTER, rowH);
+                addMarkCell(marksTable, "",        regular, bodyF - 1,rowBg, TextAlignment.CENTER, rowH);
                 addMarkCell(marksTable, scoreStr, regular, bodyF,     rowBg, TextAlignment.CENTER, rowH);
                 addMarkCell(marksTable, level,    bold,    bodyF - 1, rowBg, TextAlignment.CENTER, rowH);
             } else if (isEndTerm) {
                 addMarkCell(marksTable, "",        regular, bodyF,     rowBg, TextAlignment.CENTER, rowH);
                 addMarkCell(marksTable, "",        regular, bodyF - 1, rowBg, TextAlignment.CENTER, rowH);
                 addMarkCell(marksTable, scoreStr, regular, bodyF,     rowBg, TextAlignment.CENTER, rowH);
+                addMarkCell(marksTable, level,    bold,    bodyF - 1, rowBg, TextAlignment.CENTER, rowH);
                 addMarkCell(marksTable, scoreStr, regular, bodyF,     rowBg, TextAlignment.CENTER, rowH);
                 addMarkCell(marksTable, level,    bold,    bodyF - 1, rowBg, TextAlignment.CENTER, rowH);
             } else {
                 addMarkCell(marksTable, scoreStr, regular, bodyF,     rowBg, TextAlignment.CENTER, rowH);
                 addMarkCell(marksTable, level,    bold,    bodyF - 1, rowBg, TextAlignment.CENTER, rowH);
                 addMarkCell(marksTable, scoreStr, regular, bodyF,     rowBg, TextAlignment.CENTER, rowH);
+                addMarkCell(marksTable, level,    bold,    bodyF - 1, rowBg, TextAlignment.CENTER, rowH);
                 addMarkCell(marksTable, scoreStr, regular, bodyF,     rowBg, TextAlignment.CENTER, rowH);
                 addMarkCell(marksTable, level,    bold,    bodyF - 1, rowBg, TextAlignment.CENTER, rowH);
             }
@@ -202,18 +205,21 @@ public class ReportService {
             addMarkCell(marksTable, totalStr, bold, bodyF,     TOTAL_ROW_BG, TextAlignment.CENTER, rowH);
             addMarkCell(marksTable, "",       bold, bodyF - 1, TOTAL_ROW_BG, TextAlignment.CENTER, rowH);
             addMarkCell(marksTable, "",       bold, bodyF,     TOTAL_ROW_BG, TextAlignment.CENTER, rowH);
+            addMarkCell(marksTable, "",       bold, bodyF - 1, TOTAL_ROW_BG, TextAlignment.CENTER, rowH);
             addMarkCell(marksTable, avgStr,   bold, bodyF,     TOTAL_ROW_BG, TextAlignment.CENTER, rowH);
             addMarkCell(marksTable, avgLevel, bold, bodyF - 1, TOTAL_ROW_BG, TextAlignment.CENTER, rowH);
         } else if (isEndTerm) {
             addMarkCell(marksTable, "",       bold, bodyF,     TOTAL_ROW_BG, TextAlignment.CENTER, rowH);
             addMarkCell(marksTable, "",       bold, bodyF - 1, TOTAL_ROW_BG, TextAlignment.CENTER, rowH);
             addMarkCell(marksTable, totalStr, bold, bodyF,     TOTAL_ROW_BG, TextAlignment.CENTER, rowH);
+            addMarkCell(marksTable, "",       bold, bodyF - 1, TOTAL_ROW_BG, TextAlignment.CENTER, rowH);
             addMarkCell(marksTable, avgStr,   bold, bodyF,     TOTAL_ROW_BG, TextAlignment.CENTER, rowH);
             addMarkCell(marksTable, avgLevel, bold, bodyF - 1, TOTAL_ROW_BG, TextAlignment.CENTER, rowH);
         } else {
             addMarkCell(marksTable, totalStr, bold, bodyF,     TOTAL_ROW_BG, TextAlignment.CENTER, rowH);
             addMarkCell(marksTable, "",       bold, bodyF - 1, TOTAL_ROW_BG, TextAlignment.CENTER, rowH);
             addMarkCell(marksTable, totalStr, bold, bodyF,     TOTAL_ROW_BG, TextAlignment.CENTER, rowH);
+            addMarkCell(marksTable, "",       bold, bodyF - 1, TOTAL_ROW_BG, TextAlignment.CENTER, rowH);
             addMarkCell(marksTable, avgStr,   bold, bodyF,     TOTAL_ROW_BG, TextAlignment.CENTER, rowH);
             addMarkCell(marksTable, avgLevel, bold, bodyF - 1, TOTAL_ROW_BG, TextAlignment.CENTER, rowH);
         }
@@ -308,6 +314,7 @@ public class ReportService {
             String midStr   = midScore != null ? midScore.toPlainString() : "";
             String midLevel = midScore != null ? getDetailedGrade(midScore.doubleValue()) : "";
             String endStr   = endScore != null ? endScore.toPlainString() : "";
+            String endLevel = endScore != null ? getDetailedGrade(endScore.doubleValue()) : "";
 
             double avg = 0;
             if (midScore != null && endScore != null)      avg = (midScore.doubleValue() + endScore.doubleValue()) / 2.0;
@@ -321,6 +328,7 @@ public class ReportService {
             addMarkCell(marksTable, midStr,   regular, bodyF,     rowBg, TextAlignment.CENTER, rowH);
             addMarkCell(marksTable, midLevel, bold,    bodyF - 1, rowBg, TextAlignment.CENTER, rowH);
             addMarkCell(marksTable, endStr,   regular, bodyF,     rowBg, TextAlignment.CENTER, rowH);
+            addMarkCell(marksTable, endLevel, bold,    bodyF - 1, rowBg, TextAlignment.CENTER, rowH);
             addMarkCell(marksTable, avgStr,   regular, bodyF,     rowBg, TextAlignment.CENTER, rowH);
             addMarkCell(marksTable, avgLevel, bold,    bodyF - 1, rowBg, TextAlignment.CENTER, rowH);
 
@@ -342,6 +350,7 @@ public class ReportService {
         addMarkCell(marksTable, totalMidStr,   bold, bodyF,     TOTAL_ROW_BG, TextAlignment.CENTER, rowH);
         addMarkCell(marksTable, "",            bold, bodyF - 1, TOTAL_ROW_BG, TextAlignment.CENTER, rowH);
         addMarkCell(marksTable, totalEndStr,   bold, bodyF,     TOTAL_ROW_BG, TextAlignment.CENTER, rowH);
+        addMarkCell(marksTable, "",            bold, bodyF - 1, TOTAL_ROW_BG, TextAlignment.CENTER, rowH);
         addMarkCell(marksTable, totalAvgStr,   bold, bodyF,     TOTAL_ROW_BG, TextAlignment.CENTER, rowH);
         addMarkCell(marksTable, totalAvgLevel, bold, bodyF - 1, TOTAL_ROW_BG, TextAlignment.CENTER, rowH);
 
@@ -456,18 +465,24 @@ public class ReportService {
     }
 
     private Table buildTableHeader(float bodyF, float hdrF) throws Exception {
-        float[] colWidths = {38, 12, 12, 12, 13, 13};
+        float[] colWidths = {30, 10, 10, 10, 10, 15, 15};
         Table t = new Table(UnitValue.createPercentArray(colWidths)).setWidth(UnitValue.createPercentValue(100)).setMarginTop(8);
-        t.addHeaderCell(new Cell(2, 1).add(new Paragraph("LEARNING AREAS").setFont(PdfFontFactory.createFont(com.itextpdf.io.font.constants.StandardFonts.HELVETICA_BOLD)).setFontSize(hdrF))
+
+        PdfFont hdrBold = PdfFontFactory.createFont(com.itextpdf.io.font.constants.StandardFonts.HELVETICA_BOLD);
+
+        // Row 1: LEARNING AREAS (spans 2 rows), MID TERM (spans 2 cols), END TERM (spans 2 cols), TERMLY AVERAGE (spans 2 cols)
+        t.addHeaderCell(new Cell(2, 1).add(new Paragraph("LEARNING AREAS").setFont(hdrBold).setFontSize(hdrF))
                 .setBackgroundColor(TABLE_HEADER_BG).setTextAlignment(TextAlignment.CENTER).setVerticalAlignment(VerticalAlignment.MIDDLE).setPadding(6));
-        t.addHeaderCell(new Cell(1, 2).add(new Paragraph("MID TERM").setFont(PdfFontFactory.createFont(com.itextpdf.io.font.constants.StandardFonts.HELVETICA_BOLD)).setFontSize(hdrF))
+        t.addHeaderCell(new Cell(1, 2).add(new Paragraph("MID TERM").setFont(hdrBold).setFontSize(hdrF))
                 .setBackgroundColor(TABLE_HEADER_BG).setTextAlignment(TextAlignment.CENTER).setPadding(6));
-        t.addHeaderCell(new Cell(2, 1).add(new Paragraph("END TERM\nMARKS").setFont(PdfFontFactory.createFont(com.itextpdf.io.font.constants.StandardFonts.HELVETICA_BOLD)).setFontSize(hdrF))
-                .setBackgroundColor(TABLE_HEADER_BG).setTextAlignment(TextAlignment.CENTER).setVerticalAlignment(VerticalAlignment.MIDDLE).setPadding(6));
-        t.addHeaderCell(new Cell(1, 2).add(new Paragraph("TERMLY AVERAGE").setFont(PdfFontFactory.createFont(com.itextpdf.io.font.constants.StandardFonts.HELVETICA_BOLD)).setFontSize(hdrF))
+        t.addHeaderCell(new Cell(1, 2).add(new Paragraph("END TERM").setFont(hdrBold).setFontSize(hdrF))
                 .setBackgroundColor(TABLE_HEADER_BG).setTextAlignment(TextAlignment.CENTER).setPadding(6));
-        for (String sub : new String[]{"MARKS", "LEVEL", "MARKS", "LEVEL"})
-            t.addHeaderCell(new Cell().add(new Paragraph(sub).setFont(PdfFontFactory.createFont(com.itextpdf.io.font.constants.StandardFonts.HELVETICA_BOLD)).setFontSize(hdrF - 1))
+        t.addHeaderCell(new Cell(1, 2).add(new Paragraph("TERMLY AVERAGE").setFont(hdrBold).setFontSize(hdrF))
+                .setBackgroundColor(TABLE_HEADER_BG).setTextAlignment(TextAlignment.CENTER).setPadding(6));
+
+        // Row 2: sub-headers — MARKS, LEVEL for each group
+        for (String sub : new String[]{"MARKS", "LEVEL", "MARKS", "LEVEL", "MARKS", "LEVEL"})
+            t.addHeaderCell(new Cell().add(new Paragraph(sub).setFont(hdrBold).setFontSize(hdrF - 1))
                     .setBackgroundColor(TABLE_HEADER_BG).setTextAlignment(TextAlignment.CENTER).setPadding(4));
         return t;
     }
