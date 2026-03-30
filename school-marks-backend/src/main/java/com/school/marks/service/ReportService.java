@@ -241,60 +241,68 @@ public class ReportService {
         doc.add(nameGrade);
 
         // ── 4. MARKS TABLE ──
-        // Determine exam type to fill correct columns
         String examNameLower = exam.getExamName().toLowerCase();
         boolean isMidTerm = examNameLower.contains("mid") || examNameLower.contains("opener");
         boolean isEndTerm = examNameLower.contains("end");
 
-        // 6 columns: Subject | MidMark | MidLevel | EndMark | AvgMark | AvgLevel
+        // Dynamically scale fonts and row height based on subject count
+        int subjectTotal = studentData.getSubjectMarks().size();
+        float rowMinHeight = subjectTotal <= 5  ? 52f :
+                             subjectTotal <= 7  ? 42f :
+                             subjectTotal <= 9  ? 34f : 26f;
+        float bodyFont    = subjectTotal <= 5  ? 12f :
+                            subjectTotal <= 7  ? 11f :
+                            subjectTotal <= 9  ? 10f : 9f;
+        float headerFont  = subjectTotal <= 7  ? 10f : 9f;
+
         float[] colWidths = {38, 12, 12, 12, 13, 13};
         Table marksTable = new Table(UnitValue.createPercentArray(colWidths))
                 .setWidth(UnitValue.createPercentValue(100)).setMarginTop(8);
 
         // Header Row 1: LEARNING AREAS (rowspan 2) | MID TERM (colspan 2) | END TERM (rowspan 2) | TERMLY AVERAGE (colspan 2)
         marksTable.addHeaderCell(new Cell(2, 1)
-                .add(new Paragraph("LEARNING AREAS").setFont(bold).setFontSize(8))
+                .add(new Paragraph("LEARNING AREAS").setFont(bold).setFontSize(headerFont))
                 .setBackgroundColor(TABLE_HEADER_BG)
                 .setTextAlignment(TextAlignment.CENTER)
                 .setVerticalAlignment(VerticalAlignment.MIDDLE)
-                .setPadding(4));
+                .setPadding(6));
 
         marksTable.addHeaderCell(new Cell(1, 2)
-                .add(new Paragraph("MID TERM").setFont(bold).setFontSize(8))
+                .add(new Paragraph("MID TERM").setFont(bold).setFontSize(headerFont))
                 .setBackgroundColor(TABLE_HEADER_BG)
                 .setTextAlignment(TextAlignment.CENTER)
-                .setPadding(4));
+                .setPadding(6));
 
         marksTable.addHeaderCell(new Cell(2, 1)
-                .add(new Paragraph("END TERM\nMARKS").setFont(bold).setFontSize(8))
+                .add(new Paragraph("END TERM\nMARKS").setFont(bold).setFontSize(headerFont))
                 .setBackgroundColor(TABLE_HEADER_BG)
                 .setTextAlignment(TextAlignment.CENTER)
                 .setVerticalAlignment(VerticalAlignment.MIDDLE)
-                .setPadding(4));
+                .setPadding(6));
 
         marksTable.addHeaderCell(new Cell(1, 2)
-                .add(new Paragraph("TERMLY AVERAGE").setFont(bold).setFontSize(8))
+                .add(new Paragraph("TERMLY AVERAGE").setFont(bold).setFontSize(headerFont))
                 .setBackgroundColor(TABLE_HEADER_BG)
                 .setTextAlignment(TextAlignment.CENTER)
-                .setPadding(4));
+                .setPadding(6));
 
         // Header Row 2: sub-columns
         marksTable.addHeaderCell(new Cell()
-                .add(new Paragraph("MARKS").setFont(bold).setFontSize(7))
+                .add(new Paragraph("MARKS").setFont(bold).setFontSize(headerFont - 1))
                 .setBackgroundColor(TABLE_HEADER_BG)
-                .setTextAlignment(TextAlignment.CENTER).setPadding(3));
+                .setTextAlignment(TextAlignment.CENTER).setPadding(4));
         marksTable.addHeaderCell(new Cell()
-                .add(new Paragraph("LEVEL").setFont(bold).setFontSize(7))
+                .add(new Paragraph("LEVEL").setFont(bold).setFontSize(headerFont - 1))
                 .setBackgroundColor(TABLE_HEADER_BG)
-                .setTextAlignment(TextAlignment.CENTER).setPadding(3));
+                .setTextAlignment(TextAlignment.CENTER).setPadding(4));
         marksTable.addHeaderCell(new Cell()
-                .add(new Paragraph("MARKS").setFont(bold).setFontSize(7))
+                .add(new Paragraph("MARKS").setFont(bold).setFontSize(headerFont - 1))
                 .setBackgroundColor(TABLE_HEADER_BG)
-                .setTextAlignment(TextAlignment.CENTER).setPadding(3));
+                .setTextAlignment(TextAlignment.CENTER).setPadding(4));
         marksTable.addHeaderCell(new Cell()
-                .add(new Paragraph("LEVEL").setFont(bold).setFontSize(7))
+                .add(new Paragraph("LEVEL").setFont(bold).setFontSize(headerFont - 1))
                 .setBackgroundColor(TABLE_HEADER_BG)
-                .setTextAlignment(TextAlignment.CENTER).setPadding(3));
+                .setTextAlignment(TextAlignment.CENTER).setPadding(4));
 
         // Data rows
         double totalScore = 0;
@@ -308,28 +316,26 @@ public class ReportService {
             double score    = sm.getScore() != null ? sm.getScore().doubleValue() : 0;
             String level    = sm.getScore() != null ? getDetailedGrade(score) : "";
 
-            // Subject name (left-aligned)
-            addMarkCell(marksTable, sm.getSubjectName(), regular, 8, rowBg, TextAlignment.LEFT);
+            addMarkCell(marksTable, sm.getSubjectName(), regular, bodyFont, rowBg, TextAlignment.LEFT, rowMinHeight);
 
             if (isMidTerm) {
-                addMarkCell(marksTable, scoreStr, regular, 8, rowBg, TextAlignment.CENTER);
-                addMarkCell(marksTable, level,    bold,    7, rowBg, TextAlignment.CENTER);
-                addMarkCell(marksTable, "",        regular, 8, rowBg, TextAlignment.CENTER);
-                addMarkCell(marksTable, scoreStr, regular, 8, rowBg, TextAlignment.CENTER);
-                addMarkCell(marksTable, level,    bold,    7, rowBg, TextAlignment.CENTER);
+                addMarkCell(marksTable, scoreStr, regular, bodyFont,     rowBg, TextAlignment.CENTER, rowMinHeight);
+                addMarkCell(marksTable, level,    bold,    bodyFont - 1, rowBg, TextAlignment.CENTER, rowMinHeight);
+                addMarkCell(marksTable, "",        regular, bodyFont,    rowBg, TextAlignment.CENTER, rowMinHeight);
+                addMarkCell(marksTable, scoreStr, regular, bodyFont,     rowBg, TextAlignment.CENTER, rowMinHeight);
+                addMarkCell(marksTable, level,    bold,    bodyFont - 1, rowBg, TextAlignment.CENTER, rowMinHeight);
             } else if (isEndTerm) {
-                addMarkCell(marksTable, "",        regular, 8, rowBg, TextAlignment.CENTER);
-                addMarkCell(marksTable, "",        regular, 7, rowBg, TextAlignment.CENTER);
-                addMarkCell(marksTable, scoreStr, regular, 8, rowBg, TextAlignment.CENTER);
-                addMarkCell(marksTable, scoreStr, regular, 8, rowBg, TextAlignment.CENTER);
-                addMarkCell(marksTable, level,    bold,    7, rowBg, TextAlignment.CENTER);
+                addMarkCell(marksTable, "",        regular, bodyFont,     rowBg, TextAlignment.CENTER, rowMinHeight);
+                addMarkCell(marksTable, "",        regular, bodyFont - 1, rowBg, TextAlignment.CENTER, rowMinHeight);
+                addMarkCell(marksTable, scoreStr, regular, bodyFont,     rowBg, TextAlignment.CENTER, rowMinHeight);
+                addMarkCell(marksTable, scoreStr, regular, bodyFont,     rowBg, TextAlignment.CENTER, rowMinHeight);
+                addMarkCell(marksTable, level,    bold,    bodyFont - 1, rowBg, TextAlignment.CENTER, rowMinHeight);
             } else {
-                // Fallback: fill all columns
-                addMarkCell(marksTable, scoreStr, regular, 8, rowBg, TextAlignment.CENTER);
-                addMarkCell(marksTable, level,    bold,    7, rowBg, TextAlignment.CENTER);
-                addMarkCell(marksTable, scoreStr, regular, 8, rowBg, TextAlignment.CENTER);
-                addMarkCell(marksTable, scoreStr, regular, 8, rowBg, TextAlignment.CENTER);
-                addMarkCell(marksTable, level,    bold,    7, rowBg, TextAlignment.CENTER);
+                addMarkCell(marksTable, scoreStr, regular, bodyFont,     rowBg, TextAlignment.CENTER, rowMinHeight);
+                addMarkCell(marksTable, level,    bold,    bodyFont - 1, rowBg, TextAlignment.CENTER, rowMinHeight);
+                addMarkCell(marksTable, scoreStr, regular, bodyFont,     rowBg, TextAlignment.CENTER, rowMinHeight);
+                addMarkCell(marksTable, scoreStr, regular, bodyFont,     rowBg, TextAlignment.CENTER, rowMinHeight);
+                addMarkCell(marksTable, level,    bold,    bodyFont - 1, rowBg, TextAlignment.CENTER, rowMinHeight);
             }
 
             if (sm.getScore() != null) {
@@ -346,27 +352,28 @@ public class ReportService {
         String avgLevel = subjectCount > 0 ? getDetailedGrade(avg)             : "";
 
         marksTable.addCell(new Cell()
-                .add(new Paragraph("TOTAL").setFont(bold).setFontSize(8))
-                .setBackgroundColor(TOTAL_ROW_BG).setPadding(4));
+                .add(new Paragraph("TOTAL").setFont(bold).setFontSize(bodyFont))
+                .setBackgroundColor(TOTAL_ROW_BG).setPadding(6)
+                .setMinHeight(rowMinHeight));
 
         if (isMidTerm) {
-            addMarkCell(marksTable, totalStr, bold, 8, TOTAL_ROW_BG, TextAlignment.CENTER);
-            addMarkCell(marksTable, "",       bold, 7, TOTAL_ROW_BG, TextAlignment.CENTER);
-            addMarkCell(marksTable, "",       bold, 8, TOTAL_ROW_BG, TextAlignment.CENTER);
-            addMarkCell(marksTable, avgStr,   bold, 8, TOTAL_ROW_BG, TextAlignment.CENTER);
-            addMarkCell(marksTable, avgLevel, bold, 7, TOTAL_ROW_BG, TextAlignment.CENTER);
+            addMarkCell(marksTable, totalStr, bold, bodyFont,     TOTAL_ROW_BG, TextAlignment.CENTER, rowMinHeight);
+            addMarkCell(marksTable, "",       bold, bodyFont - 1, TOTAL_ROW_BG, TextAlignment.CENTER, rowMinHeight);
+            addMarkCell(marksTable, "",       bold, bodyFont,     TOTAL_ROW_BG, TextAlignment.CENTER, rowMinHeight);
+            addMarkCell(marksTable, avgStr,   bold, bodyFont,     TOTAL_ROW_BG, TextAlignment.CENTER, rowMinHeight);
+            addMarkCell(marksTable, avgLevel, bold, bodyFont - 1, TOTAL_ROW_BG, TextAlignment.CENTER, rowMinHeight);
         } else if (isEndTerm) {
-            addMarkCell(marksTable, "",       bold, 8, TOTAL_ROW_BG, TextAlignment.CENTER);
-            addMarkCell(marksTable, "",       bold, 7, TOTAL_ROW_BG, TextAlignment.CENTER);
-            addMarkCell(marksTable, totalStr, bold, 8, TOTAL_ROW_BG, TextAlignment.CENTER);
-            addMarkCell(marksTable, avgStr,   bold, 8, TOTAL_ROW_BG, TextAlignment.CENTER);
-            addMarkCell(marksTable, avgLevel, bold, 7, TOTAL_ROW_BG, TextAlignment.CENTER);
+            addMarkCell(marksTable, "",       bold, bodyFont,     TOTAL_ROW_BG, TextAlignment.CENTER, rowMinHeight);
+            addMarkCell(marksTable, "",       bold, bodyFont - 1, TOTAL_ROW_BG, TextAlignment.CENTER, rowMinHeight);
+            addMarkCell(marksTable, totalStr, bold, bodyFont,     TOTAL_ROW_BG, TextAlignment.CENTER, rowMinHeight);
+            addMarkCell(marksTable, avgStr,   bold, bodyFont,     TOTAL_ROW_BG, TextAlignment.CENTER, rowMinHeight);
+            addMarkCell(marksTable, avgLevel, bold, bodyFont - 1, TOTAL_ROW_BG, TextAlignment.CENTER, rowMinHeight);
         } else {
-            addMarkCell(marksTable, totalStr, bold, 8, TOTAL_ROW_BG, TextAlignment.CENTER);
-            addMarkCell(marksTable, "",       bold, 7, TOTAL_ROW_BG, TextAlignment.CENTER);
-            addMarkCell(marksTable, totalStr, bold, 8, TOTAL_ROW_BG, TextAlignment.CENTER);
-            addMarkCell(marksTable, avgStr,   bold, 8, TOTAL_ROW_BG, TextAlignment.CENTER);
-            addMarkCell(marksTable, avgLevel, bold, 7, TOTAL_ROW_BG, TextAlignment.CENTER);
+            addMarkCell(marksTable, totalStr, bold, bodyFont,     TOTAL_ROW_BG, TextAlignment.CENTER, rowMinHeight);
+            addMarkCell(marksTable, "",       bold, bodyFont - 1, TOTAL_ROW_BG, TextAlignment.CENTER, rowMinHeight);
+            addMarkCell(marksTable, totalStr, bold, bodyFont,     TOTAL_ROW_BG, TextAlignment.CENTER, rowMinHeight);
+            addMarkCell(marksTable, avgStr,   bold, bodyFont,     TOTAL_ROW_BG, TextAlignment.CENTER, rowMinHeight);
+            addMarkCell(marksTable, avgLevel, bold, bodyFont - 1, TOTAL_ROW_BG, TextAlignment.CENTER, rowMinHeight);
         }
 
         doc.add(marksTable);
@@ -567,14 +574,21 @@ public class ReportService {
     }
 
     private void addMarkCell(Table table, String text, PdfFont font, float fontSize,
-                             DeviceRgb bg, TextAlignment align) {
+                             DeviceRgb bg, TextAlignment align, float minHeight) {
         Cell cell = new Cell()
                 .add(new Paragraph(text != null ? text : "").setFont(font).setFontSize(fontSize))
                 .setTextAlignment(align)
                 .setVerticalAlignment(VerticalAlignment.MIDDLE)
-                .setPadding(3);
+                .setPadding(4)
+                .setMinHeight(minHeight);
         if (bg != null) cell.setBackgroundColor(bg);
         table.addCell(cell);
+    }
+
+    // Legacy overload without minHeight (used by other methods)
+    private void addMarkCell(Table table, String text, PdfFont font, float fontSize,
+                             DeviceRgb bg, TextAlignment align) {
+        addMarkCell(table, text, font, fontSize, bg, align, 0);
     }
 
     /** Detailed CBC grade (EE1, EE2, ME1, ME2, AE1, AE2, BE1, BE2) */
