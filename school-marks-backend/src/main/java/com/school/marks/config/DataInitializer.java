@@ -65,11 +65,7 @@ public class DataInitializer implements CommandLineRunner {
 
             // ── Lower Primary (Grade 1–3) ──
             Subject.builder().subjectName("English Language").levelType("lower_primary").build(),
-            Subject.builder().subjectName("Reading").levelType("lower_primary").build(),
-            Subject.builder().subjectName("Language Total").levelType("lower_primary").build(),
             Subject.builder().subjectName("Kiswahili Lugha").levelType("lower_primary").build(),
-            Subject.builder().subjectName("Kusoma").levelType("lower_primary").build(),
-            Subject.builder().subjectName("Kiswahili Jumla").levelType("lower_primary").build(),
             Subject.builder().subjectName("Mathematical Activities").levelType("lower_primary").build(),
             Subject.builder().subjectName("Creative Activities").levelType("lower_primary").build(),
             Subject.builder().subjectName("Environmental Activities").levelType("lower_primary").build(),
