@@ -210,7 +210,7 @@ public class ReportService {
 
         // ── 2. TITLE BOX ──
         doc.add(new Paragraph(
-                "SCHOOL BASED TERMLY ASSESSMENT REPORT YEAR " + exam.getAcademicYear())
+                "SCHOOL BASED TERM " + exam.getTerm() + " ASSESSMENT REPORT YEAR " + exam.getAcademicYear())
                 .setFont(bold).setFontSize(10)
                 .setTextAlignment(TextAlignment.CENTER)
                 .setBorder(new SolidBorder(ColorConstants.BLACK, 1.5f))
