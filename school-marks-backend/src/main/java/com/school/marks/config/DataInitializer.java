@@ -57,7 +57,6 @@ public class DataInitializer implements CommandLineRunner {
 
             // ── Pre-Primary (PP1 & PP2) ──
             Subject.builder().subjectName("Language Activities").levelType("pre_primary").build(),
-            Subject.builder().subjectName("Reading").levelType("pre_primary").build(),
             Subject.builder().subjectName("Mathematical Activities").levelType("pre_primary").build(),
             Subject.builder().subjectName("Creative Activities").levelType("pre_primary").build(),
             Subject.builder().subjectName("Environmental Activities").levelType("pre_primary").build(),
