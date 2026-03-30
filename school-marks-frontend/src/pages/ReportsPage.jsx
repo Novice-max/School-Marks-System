@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getClasses, downloadMarklist, downloadMarksheet } from '../api/client';
+import { getClasses, downloadMarklist, downloadTermReport } from '../api/client';
 import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
@@ -21,17 +21,25 @@ export default function ReportsPage() {
   const { user } = useAuth();
   const isAdmin  = user?.role === 'ADMIN';
 
-  const [classes,    setClasses]    = useState([]);
-  const [exams,      setExams]      = useState([]);
-  const [students,   setStudents]   = useState([]);
-  const [selClass,   setSelClass]   = useState('');
-  const [selExam,    setSelExam]    = useState('');
-  const [selStudent, setSelStudent] = useState('');
-  const [loading,    setLoading]    = useState('');
+  const [classes,     setClasses]     = useState([]);
+  const [exams,       setExams]       = useState([]);
+  const [students,    setStudents]    = useState([]);
+  const [loading,     setLoading]     = useState('');
 
-  const [schoolYear, setSchoolYear] = useState(new Date().getFullYear().toString());
-  const [schoolTerm, setSchoolTerm] = useState('1');
-  const [schoolExam, setSchoolExam] = useState('Opener');
+  // Class marklist state
+  const [listClass,   setListClass]   = useState('');
+  const [listExam,    setListExam]    = useState('');
+
+  // Student report card state
+  const [cardClass,   setCardClass]   = useState('');
+  const [cardStudent, setCardStudent] = useState('');
+  const [cardTerm,    setCardTerm]    = useState('1');
+  const [cardYear,    setCardYear]    = useState(new Date().getFullYear().toString());
+
+  // School-wide report state
+  const [schoolYear,  setSchoolYear]  = useState(new Date().getFullYear().toString());
+  const [schoolTerm,  setSchoolTerm]  = useState('1');
+  const [schoolExam,  setSchoolExam]  = useState('Opener');
 
   useEffect(() => {
     if (isAdmin) {
@@ -51,36 +59,42 @@ export default function ReportsPage() {
     }
   }, [isAdmin]);
 
+  // Load exams when marklist class changes
   useEffect(() => {
-    if (!selClass) { setExams([]); setStudents([]); return; }
-    const endpoint = isAdmin ? `/admin/exams` : `/teacher/exams/class/${selClass}`;
+    if (!listClass) { setExams([]); return; }
+    const endpoint = isAdmin ? `/admin/exams` : `/teacher/exams/class/${listClass}`;
     api.get(endpoint).then(r => {
-      const filtered = isAdmin ? r.data.filter(e => e.classRoom?.classId == selClass) : r.data;
+      const filtered = isAdmin ? r.data.filter(e => e.classRoom?.classId == listClass) : r.data;
       setExams(filtered);
     });
-    const studEndpoint = isAdmin ? `/admin/students/class/${selClass}` : `/teacher/students/class/${selClass}`;
-    api.get(studEndpoint).then(r => setStudents(r.data));
-  }, [selClass, isAdmin]);
+  }, [listClass, isAdmin]);
+
+  // Load students when report card class changes
+  useEffect(() => {
+    if (!cardClass) { setStudents([]); return; }
+    const endpoint = isAdmin ? `/admin/students/class/${cardClass}` : `/teacher/students/class/${cardClass}`;
+    api.get(endpoint).then(r => setStudents(r.data));
+  }, [cardClass, isAdmin]);
 
   const dlMarklist = async () => {
-    if (!selExam) { toast.error('Select an exam'); return; }
+    if (!listExam) { toast.error('Select an exam'); return; }
     setLoading('list');
     try {
-      const { data } = await downloadMarklist(selExam);
-      savePdf(data, `marklist_exam_${selExam}.pdf`);
+      const { data } = await downloadMarklist(listExam);
+      savePdf(data, `marklist_exam_${listExam}.pdf`);
       toast.success('Marklist downloaded');
     } catch { toast.error('Failed to generate marklist'); }
     finally { setLoading(''); }
   };
 
-  const dlMarksheet = async () => {
-    if (!selExam || !selStudent) { toast.error('Select exam and student'); return; }
+  const dlTermReport = async () => {
+    if (!cardClass || !cardStudent) { toast.error('Select class and student'); return; }
     setLoading('sheet');
     try {
-      const { data } = await downloadMarksheet(selStudent, selExam);
-      savePdf(data, `marksheet_student_${selStudent}.pdf`);
-      toast.success('Marksheet downloaded');
-    } catch { toast.error('Failed to generate marksheet'); }
+      const { data } = await downloadTermReport(cardStudent, cardClass, cardTerm, cardYear);
+      savePdf(data, `report_student_${cardStudent}_term${cardTerm}.pdf`);
+      toast.success('Report card downloaded');
+    } catch { toast.error('No exam data found for this term — ensure marks are entered'); }
     finally { setLoading(''); }
   };
 
@@ -109,7 +123,7 @@ export default function ReportsPage() {
           <p style={s.cardDesc}>Full marklist with positions, averages and grades</p>
 
           <label style={s.label}>Class</label>
-          <select style={s.select} value={selClass} onChange={e => { setSelClass(e.target.value); setSelExam(''); }}>
+          <select style={s.select} value={listClass} onChange={e => { setListClass(e.target.value); setListExam(''); }}>
             <option value="">Select class</option>
             {classes.map(c => (
               <option key={c.classId} value={c.classId}>{classLabel(c)} {c.academicYear ? `(${c.academicYear})` : ''}</option>
@@ -117,7 +131,7 @@ export default function ReportsPage() {
           </select>
 
           <label style={s.label}>Exam</label>
-          <select style={s.select} value={selExam} onChange={e => setSelExam(e.target.value)}>
+          <select style={s.select} value={listExam} onChange={e => setListExam(e.target.value)}>
             <option value="">Select exam</option>
             {exams.map(e => <option key={e.examId} value={e.examId}>{e.examName} T{e.term} {e.academicYear}</option>)}
           </select>
@@ -131,10 +145,10 @@ export default function ReportsPage() {
         <div style={s.card}>
           <div style={s.cardIcon}>👤</div>
           <h3 style={s.cardTitle}>Student Report Card</h3>
-          <p style={s.cardDesc}>Individual marksheet with grades and class position</p>
+          <p style={s.cardDesc}>Full term report combining Mid-Term and End-Term marks</p>
 
           <label style={s.label}>Class</label>
-          <select style={s.select} value={selClass} onChange={e => { setSelClass(e.target.value); setSelStudent(''); setSelExam(''); }}>
+          <select style={s.select} value={cardClass} onChange={e => { setCardClass(e.target.value); setCardStudent(''); }}>
             <option value="">Select class</option>
             {classes.map(c => (
               <option key={c.classId} value={c.classId}>{classLabel(c)} {c.academicYear ? `(${c.academicYear})` : ''}</option>
@@ -142,21 +156,26 @@ export default function ReportsPage() {
           </select>
 
           <label style={s.label}>Student</label>
-          <select style={s.select} value={selStudent} onChange={e => setSelStudent(e.target.value)}>
+          <select style={s.select} value={cardStudent} onChange={e => setCardStudent(e.target.value)}>
             <option value="">Select student</option>
             {students.map(st => (
               <option key={st.studentId} value={st.studentId}>{st.firstName} {st.lastName} ({st.admissionNumber})</option>
             ))}
           </select>
 
-          <label style={s.label}>Exam</label>
-          <select style={s.select} value={selExam} onChange={e => setSelExam(e.target.value)}>
-            <option value="">Select exam</option>
-            {exams.map(e => <option key={e.examId} value={e.examId}>{e.examName} T{e.term} {e.academicYear}</option>)}
+          <label style={s.label}>Term</label>
+          <select style={s.select} value={cardTerm} onChange={e => setCardTerm(e.target.value)}>
+            <option value="1">Term 1</option>
+            <option value="2">Term 2</option>
+            <option value="3">Term 3</option>
           </select>
 
-          <button style={s.btn} onClick={dlMarksheet} disabled={loading === 'sheet'}>
-            {loading === 'sheet' ? 'Generating...' : '⬇️ Download PDF'}
+          <label style={s.label}>Academic Year</label>
+          <input style={s.select} type="text" value={cardYear}
+            onChange={e => setCardYear(e.target.value)} placeholder="e.g. 2026" />
+
+          <button style={s.btn} onClick={dlTermReport} disabled={loading === 'sheet'}>
+            {loading === 'sheet' ? 'Generating...' : '⬇️ Download Report Card'}
           </button>
         </div>
 
