@@ -408,17 +408,20 @@ public class ReportService {
 
         // ── 7. SIGNATURES ──
         Table sigTable = new Table(UnitValue.createPercentArray(new float[]{40, 35, 25}))
-                .setWidth(UnitValue.createPercentValue(100)).setMarginTop(14);
+                .setWidth(UnitValue.createPercentValue(100)).setMarginTop(20);
         sigTable.addCell(new Cell()
                 .add(new Paragraph("HEAD TEACHER'S SIGNATURE:").setFont(bold).setFontSize(8))
+                .add(new Paragraph(" ").setFontSize(6))
                 .add(new Paragraph("________________________________").setFont(regular).setFontSize(9))
                 .setBorder(Border.NO_BORDER));
         sigTable.addCell(new Cell()
                 .add(new Paragraph("CLASS TEACHER'S SIGNATURE:").setFont(bold).setFontSize(8))
+                .add(new Paragraph(" ").setFontSize(6))
                 .add(new Paragraph("______________________").setFont(regular).setFontSize(9))
                 .setBorder(Border.NO_BORDER));
         sigTable.addCell(new Cell()
                 .add(new Paragraph("DATE:").setFont(bold).setFontSize(8))
+                .add(new Paragraph(" ").setFontSize(6))
                 .add(new Paragraph("_________________").setFont(regular).setFontSize(9))
                 .setBorder(Border.NO_BORDER));
         doc.add(sigTable);
