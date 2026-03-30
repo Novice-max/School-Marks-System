@@ -9,10 +9,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
-import com.school.marks.model.Exam;
-import com.school.marks.model.Mark;
+
 @RestController
 @RequestMapping("/api/teacher")
 @RequiredArgsConstructor
@@ -23,13 +23,31 @@ public class TeacherController {
     private final ExamRepository examRepository;
     private final MarkRepository markRepository;
 
+    private static final BigDecimal MIN_SCORE = BigDecimal.ZERO;
+    private static final BigDecimal MAX_SCORE = new BigDecimal("100");
+
     @PostMapping("/marks")
-    public ResponseEntity<Mark> enterMark(@AuthenticationPrincipal UserDetails ud, @Valid @RequestBody MarkEntryDTO dto) {
+    public ResponseEntity<?> enterMark(@AuthenticationPrincipal UserDetails ud, @Valid @RequestBody MarkEntryDTO dto) {
+        if (dto.getScore() != null) {
+            if (dto.getScore().compareTo(MIN_SCORE) < 0 || dto.getScore().compareTo(MAX_SCORE) > 0) {
+                return ResponseEntity.badRequest().body(Map.of("message", "Score must be between 0 and 100"));
+            }
+        }
         return ResponseEntity.ok(markService.enterOrUpdateMark(dto, ud.getUsername()));
     }
 
     @PostMapping("/marks/bulk")
-    public ResponseEntity<String> enterMarksBulk(@AuthenticationPrincipal UserDetails ud, @RequestBody List<MarkEntryDTO> marks) {
+    public ResponseEntity<?> enterMarksBulk(@AuthenticationPrincipal UserDetails ud, @RequestBody List<MarkEntryDTO> marks) {
+        // Validate ALL marks before saving any — fail fast
+        for (MarkEntryDTO dto : marks) {
+            if (dto.getScore() != null) {
+                if (dto.getScore().compareTo(MIN_SCORE) < 0 || dto.getScore().compareTo(MAX_SCORE) > 0) {
+                    return ResponseEntity.badRequest().body(Map.of(
+                        "message", "Score must be between 0 and 100. Found invalid value: " + dto.getScore()
+                    ));
+                }
+            }
+        }
         for (MarkEntryDTO dto : marks) markService.enterOrUpdateMark(dto, ud.getUsername());
         return ResponseEntity.ok("Marks saved successfully");
     }
@@ -54,15 +72,16 @@ public class TeacherController {
     public ResponseEntity<List<StudentMarkSummaryDTO>> getMarklist(@PathVariable Long examId) {
         return ResponseEntity.ok(markService.getClassMarkList(examId));
     }
-    // Get exams for a class (teacher needs this for mark entry)
+
     @GetMapping("/exams/class/{classId}")
     public ResponseEntity<List<Exam>> getExamsByClass(@PathVariable Long classId) {
         return ResponseEntity.ok(examRepository.findByClassRoom_ClassId(classId));
     }
+
     @GetMapping("/marks/{examId}/{subjectId}")
     public ResponseEntity<List<Mark>> getMarksByExamAndSubject(
         @PathVariable Long examId,
         @PathVariable Long subjectId) {
-    return ResponseEntity.ok(markRepository.findByExam_ExamIdAndSubject_SubjectId(examId, subjectId));
-}
+        return ResponseEntity.ok(markRepository.findByExam_ExamIdAndSubject_SubjectId(examId, subjectId));
+    }
 }

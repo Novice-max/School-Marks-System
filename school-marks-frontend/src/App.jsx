@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import ErrorBoundary from './components/ErrorBoundary';
 import Layout from './components/Layout';
 import TeacherDashboard from './pages/teacher/TeacherDashboard';
 import LoginPage          from './pages/LoginPage';
@@ -17,14 +18,6 @@ import MarkEntryPage      from './pages/teacher/MarkEntryPage';
 import TeacherAnalyticsPage from './pages/teacher/TeacherAnalyticsPage';
 import SubjectsPage from './pages/admin/SubjectsPage';
 
-const Placeholder = ({ title }) => (
-  <div style={{ padding: 40, textAlign: 'center', color: '#888' }}>
-    <div style={{ fontSize: 48, marginBottom: 16 }}>🚧</div>
-    <h2>{title}</h2>
-    <p>Coming soon</p>
-  </div>
-);
-
 function PrivateRoute({ children, role }) {
   const { user } = useAuth();
   if (!user) return <Navigate to="/login" replace />;
@@ -35,7 +28,6 @@ function PrivateRoute({ children, role }) {
 function AppRoutes() {
   const { user } = useAuth();
 
-  // Keep Railway backend alive — prevents cold start delays on login
   useEffect(() => {
     const ping = () =>
       fetch('https://school-marks-system-production.up.railway.app/actuator/health')
@@ -50,17 +42,15 @@ function AppRoutes() {
       <Route path="/login" element={user ? <Navigate to={user.role === 'ADMIN' ? '/admin' : '/teacher'} /> : <LoginPage />} />
       <Route path="/change-password" element={<ChangePasswordPage />} />
 
-      {/* Admin routes */}
       <Route path="/admin"             element={<PrivateRoute role="ADMIN"><AdminDashboard /></PrivateRoute>} />
       <Route path="/admin/teachers"    element={<PrivateRoute role="ADMIN"><TeachersPage /></PrivateRoute>} />
       <Route path="/admin/students"    element={<PrivateRoute role="ADMIN"><StudentsPage /></PrivateRoute>} />
       <Route path="/admin/classes"     element={<PrivateRoute role="ADMIN"><ClassesPage /></PrivateRoute>} />
-      <Route path="/admin/subjects" element={<PrivateRoute role="ADMIN"><SubjectsPage /></PrivateRoute>} />
+      <Route path="/admin/subjects"    element={<PrivateRoute role="ADMIN"><SubjectsPage /></PrivateRoute>} />
       <Route path="/admin/exams"       element={<PrivateRoute role="ADMIN"><ExamsPage /></PrivateRoute>} />
       <Route path="/admin/assignments" element={<PrivateRoute role="ADMIN"><AssignmentsPage /></PrivateRoute>} />
       <Route path="/admin/reports"     element={<PrivateRoute role="ADMIN"><ReportsPage /></PrivateRoute>} />
 
-      {/* Teacher routes */}
       <Route path="/teacher" element={<PrivateRoute><TeacherDashboard /></PrivateRoute>} />
       <Route path="/teacher/marks"     element={<PrivateRoute><MarkEntryPage /></PrivateRoute>} />
       <Route path="/teacher/analytics" element={<PrivateRoute><TeacherAnalyticsPage /></PrivateRoute>} />
@@ -73,11 +63,13 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <Toaster position="top-right" />
-        <AppRoutes />
-      </BrowserRouter>
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <BrowserRouter>
+          <Toaster position="top-right" />
+          <AppRoutes />
+        </BrowserRouter>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }

@@ -42,6 +42,12 @@ export const assignTeacher           = (data)      => api.post('/admin/assign', 
 export const getAssignmentsByTeacher = (tid)       => api.get(`/admin/assignments/teacher/${tid}`);
 export const removeAssignment        = (id)        => api.delete(`/admin/assign/${id}`);
 
+export const updateTeacher       = (id, data) => api.put(`/admin/teachers/${id}`, data);
+export const updateStudent       = (id, data) => api.put(`/admin/students/${id}`, data);
+export const deactivateStudent   = (id)       => api.post(`/admin/students/${id}/deactivate`);
+export const activateStudent     = (id)       => api.post(`/admin/students/${id}/activate`);
+export const updateClass         = (id, data) => api.put(`/admin/classes/${id}`, data);
+
 // ── Analytics ──
 export const getGradeDistribution = (examId)           => api.get(`/admin/analytics/grade-distribution/${examId}`);
 export const getSubjectAverages   = (examId, classId)   => api.get(`/admin/analytics/subject-averages/${examId}/${classId}`);
