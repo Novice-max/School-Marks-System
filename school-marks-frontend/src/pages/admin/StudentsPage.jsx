@@ -78,8 +78,8 @@ export default function StudentsPage() {
   };
 
   const toggleActive = async (st) => {
-    const action = st.active !== false ? 'deactivate' : 'activate';
-    const msg = st.active !== false
+    const action = st.isActive !== false ? 'deactivate' : 'activate';
+    const msg = st.isActive !== false
       ? `Deactivate ${st.firstName} ${st.lastName}? They will be hidden from mark entry.`
       : `Reactivate ${st.firstName} ${st.lastName}?`;
     if (!window.confirm(msg)) return;
@@ -92,7 +92,7 @@ export default function StudentsPage() {
     finally { setToggling(null); }
   };
 
-  const filtered = showInactive ? students : students.filter(st => st.active !== false);
+  const filtered = showInactive ? students : students.filter(st => st.isActive !== false);
 
   return (
     <div>
@@ -209,14 +209,14 @@ export default function StudentsPage() {
                 <tbody>
                   {filtered.map((st, i) => (
                     <tr key={st.studentId} style={{
-                      background: st.active === false ? '#fef2f2' : i % 2 === 0 ? '#f8fafc' : '#fff',
-                      opacity: st.active === false ? 0.7 : 1,
+                      background: st.isActive === false ? '#fef2f2' : i % 2 === 0 ? '#f8fafc' : '#fff',
+                      opacity: st.isActive === false ? 0.7 : 1,
                     }}>
                       <td style={s.td}>{i + 1}</td>
                       <td style={s.td}>{st.admissionNumber}</td>
                       <td style={{ ...s.td, textAlign: 'left', whiteSpace: 'nowrap' }}>
                         <strong>{st.firstName} {st.lastName}</strong>
-                        {st.active === false && <span style={{ color: '#dc2626', fontSize: 11, marginLeft: 8 }}>Inactive</span>}
+                        {st.isActive === false && <span style={{ color: '#dc2626', fontSize: 11, marginLeft: 8 }}>Inactive</span>}
                       </td>
                       <td style={s.td}>{st.gender}</td>
                       <td style={s.td}>{st.parentContact || '—'}</td>
@@ -226,14 +226,14 @@ export default function StudentsPage() {
                           <button
                             style={{
                               ...s.toggleBtn,
-                              background: st.active !== false ? '#fee2e2' : '#dcfce7',
-                              color: st.active !== false ? '#dc2626' : '#16a34a',
-                              borderColor: st.active !== false ? '#fca5a5' : '#86efac',
+                              background: st.isActive !== false ? '#fee2e2' : '#dcfce7',
+                              color: st.isActive !== false ? '#dc2626' : '#16a34a',
+                              borderColor: st.isActive !== false ? '#fca5a5' : '#86efac',
                             }}
                             onClick={() => toggleActive(st)}
                             disabled={toggling === st.studentId}
                           >
-                            {toggling === st.studentId ? '...' : st.active !== false ? '🚫' : '✅'}
+                            {toggling === st.studentId ? '...' : st.isActive !== false ? '🚫' : '✅'}
                           </button>
                         </div>
                       </td>
