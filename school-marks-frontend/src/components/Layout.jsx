@@ -1,7 +1,6 @@
-import { NavLink, useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-
-const SCHOOL_NAME = 'Santa Ana Academy';
 
 const adminLinks = [
   { to: '/admin',             label: '📊 Dashboard',   end: true },
@@ -21,24 +20,101 @@ const teacherLinks = [
   { to: '/teacher/reports',   label: '📄 Reports'              },
 ];
 
+const CSS = `
+  .layout-topbar { display: none; }
+  .layout-overlay { display: none; }
+  @media (max-width: 768px) {
+    .layout-topbar {
+      display: flex !important;
+      position: fixed; top: 0; left: 0; right: 0; z-index: 200;
+      background: #1e3a5f; height: 52px;
+      align-items: center; gap: 12px; padding: 0 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.3);
+    }
+    .layout-sidebar {
+      transform: translateX(-100%);
+      top: 52px !important;
+      height: calc(100vh - 52px) !important;
+    }
+    .layout-sidebar.sidebar-open {
+      transform: translateX(0) !important;
+    }
+    .layout-overlay.overlay-open {
+      display: block !important;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.45); z-index: 149;
+    }
+    .layout-main {
+      margin-left: 0 !important;
+      padding: 68px 16px 24px !important;
+    }
+  }
+  @media (min-width: 769px) {
+    .layout-sidebar { transform: translateX(0) !important; }
+  }
+`;
+
 export default function Layout({ children }) {
   const { user, logout } = useAuth();
   const navigate         = useNavigate();
+  const location         = useLocation();
   const links            = user?.role === 'ADMIN' ? adminLinks : teacherLinks;
+  const [open, setOpen]  = useState(false);
+
+  // Inject CSS once
+  useEffect(() => {
+    if (document.getElementById('layout-css')) return;
+    const style = document.createElement('style');
+    style.id = 'layout-css';
+    style.textContent = CSS;
+    document.head.appendChild(style);
+  }, []);
+
+  // Close sidebar on route change
+  useEffect(() => { setOpen(false); }, [location.pathname]);
+
+  // Close sidebar when clicking outside
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => {
+      if (!e.target.closest('#sidebar') && !e.target.closest('#hamburger')) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
 
   return (
     <div style={s.shell}>
-      <aside style={s.sidebar}>
-        {/* Logo + School name */}
+
+      {/* Mobile top bar */}
+      <div className="layout-topbar">
+        <button id="hamburger" style={s.hamburger} onClick={() => setOpen(o => !o)}>
+          {open ? '✕' : '☰'}
+        </button>
+        <div style={s.topBarBrand}>
+          <img src="/favicon.ico" alt="Logo" style={s.topBarLogo} />
+          <span style={s.topBarName}>Santa Ana Academy</span>
+        </div>
+      </div>
+
+      {/* Overlay */}
+      <div className={`layout-overlay${open ? ' overlay-open' : ''}`}
+           onClick={() => setOpen(false)} />
+
+      {/* Sidebar */}
+      <aside id="sidebar"
+             className={`layout-sidebar${open ? ' sidebar-open' : ''}`}
+             style={s.sidebar}>
         <div style={s.brand}>
-          <img src="/new logo.jpeg" alt="Logo" style={s.logo} />
+          <img src="/favicon.ico" alt="Logo" style={s.logo} />
           <div>
             <div style={s.brandName}>Santa Ana</div>
             <div style={s.brandSub}>Academy</div>
           </div>
         </div>
 
-        {/* User badge */}
         <div style={s.userBadge}>
           <div style={s.avatar}>{user?.fullName?.[0] ?? 'U'}</div>
           <div>
@@ -68,16 +144,23 @@ export default function Layout({ children }) {
         </button>
       </aside>
 
-      <main style={s.main}>
+      {/* Main */}
+      <main className="layout-main" style={s.main}>
         {children}
       </main>
     </div>
   );
 }
 
+const SIDEBAR_W = 230;
+
 const s = {
   shell:        { display: 'flex', minHeight: '100vh' },
-  sidebar:      { width: 230, background: '#1e3a5f', display: 'flex', flexDirection: 'column', padding: '20px 0', position: 'fixed', top: 0, left: 0, height: '100vh', overflowY: 'auto' },
+  hamburger:    { background: 'none', border: 'none', color: '#fff', fontSize: 22, cursor: 'pointer', padding: '4px 8px', lineHeight: 1 },
+  topBarBrand:  { display: 'flex', alignItems: 'center', gap: 8 },
+  topBarLogo:   { width: 28, height: 28, objectFit: 'contain', borderRadius: 4 },
+  topBarName:   { color: '#fff', fontWeight: 700, fontSize: 14 },
+  sidebar:      { width: SIDEBAR_W, background: '#1e3a5f', display: 'flex', flexDirection: 'column', padding: '20px 0', position: 'fixed', top: 0, left: 0, height: '100vh', overflowY: 'auto', zIndex: 150, transition: 'transform 0.25s ease' },
   brand:        { display: 'flex', alignItems: 'center', gap: 10, padding: '0 16px 16px', borderBottom: '1px solid rgba(255,255,255,.12)' },
   logo:         { width: 42, height: 42, objectFit: 'contain', borderRadius: 4 },
   brandName:    { color: '#fff', fontWeight: 700, fontSize: 15, lineHeight: 1.2 },
@@ -90,5 +173,5 @@ const s = {
   navLink:      { display: 'block', padding: '9px 12px', borderRadius: 8, color: 'rgba(255,255,255,.75)', textDecoration: 'none', fontSize: 13, fontWeight: 500 },
   navLinkActive:{ background: 'rgba(255,255,255,.18)', color: '#fff', fontWeight: 700 },
   logoutBtn:    { margin: '12px 14px 0', padding: '10px', background: 'rgba(255,80,80,.2)', color: '#ff8080', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600 },
-  main:         { marginLeft: 230, flex: 1, padding: 32, overflowY: 'auto' },
+  main:         { marginLeft: SIDEBAR_W, flex: 1, padding: 32, overflowY: 'auto' },
 };

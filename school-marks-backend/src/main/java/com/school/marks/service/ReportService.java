@@ -226,6 +226,8 @@ public class ReportService {
         }
 
         // ── 3. LEARNER NAME + GRADE ──
+        int gl = exam.getClassRoom().getGradeLevel();
+        String gradeLabel = gl == -1 ? "PP1" : gl == 0 ? "PP2" : "GRADE " + gl;
         Table nameGrade = new Table(UnitValue.createPercentArray(new float[]{70, 30}))
                 .setWidth(UnitValue.createPercentValue(100)).setMarginTop(8);
         nameGrade.addCell(new Cell()
@@ -233,7 +235,7 @@ public class ReportService {
                         .setFont(bold).setFontSize(10))
                 .setBorder(Border.NO_BORDER));
         nameGrade.addCell(new Cell()
-                .add(new Paragraph("GRADE " + exam.getClassRoom().getGradeLevel())
+                .add(new Paragraph(gradeLabel)
                         .setFont(bold).setFontSize(10).setTextAlignment(TextAlignment.RIGHT))
                 .setBorder(Border.NO_BORDER));
         doc.add(nameGrade);
