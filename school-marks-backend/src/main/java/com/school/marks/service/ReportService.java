@@ -367,6 +367,43 @@ public class ReportService {
     }
 
     // ──────────────────────────────────────────────────────────────
+    // ALL TERM REPORT CARDS FOR A CLASS (one PDF, one student per page)
+    // ──────────────────────────────────────────────────────────────
+    public byte[] generateAllTermReportsPdf(Long classId, Integer term, String academicYear) throws Exception {
+        List<Student> students = studentRepository.findByClassRoom_ClassIdAndIsActiveTrue(classId);
+        if (students.isEmpty()) throw new RuntimeException("No active students in this class");
+
+        // Sort by last name then first name
+        students.sort((a, b) -> {
+            int cmp = a.getLastName().compareToIgnoreCase(b.getLastName());
+            return cmp != 0 ? cmp : a.getFirstName().compareToIgnoreCase(b.getFirstName());
+        });
+
+        // Generate individual PDFs and merge
+        ByteArrayOutputStream mergedBaos = new ByteArrayOutputStream();
+        PdfWriter mergedWriter = new PdfWriter(mergedBaos);
+        PdfDocument mergedPdf = new PdfDocument(mergedWriter);
+
+        int count = 0;
+        for (Student student : students) {
+            try {
+                byte[] singlePdf = generateTermReportPdf(student.getStudentId(), classId, term, academicYear);
+                PdfDocument singleDoc = new PdfDocument(new PdfReader(new java.io.ByteArrayInputStream(singlePdf)));
+                singleDoc.copyPagesTo(1, singleDoc.getNumberOfPages(), mergedPdf);
+                singleDoc.close();
+                count++;
+            } catch (Exception e) {
+                // Skip students with no marks — don't break the entire batch
+            }
+        }
+
+        if (count == 0) throw new RuntimeException("No report cards could be generated — ensure marks are entered");
+
+        mergedPdf.close();
+        return mergedBaos.toByteArray();
+    }
+    
+    // ──────────────────────────────────────────────────────────────
     // SCHOOL-WIDE REPORT PDF
     // ──────────────────────────────────────────────────────────────
     public byte[] generateSchoolReportPdf(String academicYear, Integer term, String examName) throws Exception {

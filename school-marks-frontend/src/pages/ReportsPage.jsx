@@ -98,6 +98,22 @@ export default function ReportsPage() {
     finally { setLoading(''); }
   };
 
+  const dlAllReportCards = async () => {
+    if (!cardClass) { toast.error('Select a class'); return; }
+    setLoading('allCards');
+    try {
+      const { data } = await api.get(
+        `/reports/termreport/class/${cardClass}/${cardTerm}/${cardYear}`,
+        { responseType: 'blob' }
+      );
+      const cls = classes.find(c => c.classId == cardClass);
+      const label = cls ? classLabel(cls).replace(/[^a-zA-Z0-9]/g, '_') : `class_${cardClass}`;
+      savePdf(data, `all_reports_${label}_term${cardTerm}_${cardYear}.pdf`);
+      toast.success('All report cards downloaded');
+    } catch { toast.error('Failed — ensure marks are entered for this term'); }
+    finally { setLoading(''); }
+  };
+
   const dlSchoolReport = async () => {
     setLoading('school');
     try {
@@ -174,9 +190,21 @@ export default function ReportsPage() {
           <input style={s.select} type="text" value={cardYear}
             onChange={e => setCardYear(e.target.value)} placeholder="e.g. 2026" />
 
-          <button style={s.btn} onClick={dlTermReport} disabled={loading === 'sheet'}>
-            {loading === 'sheet' ? 'Generating...' : '⬇️ Download Report Card'}
-          </button>
+          <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+            <button style={{ ...s.btn, flex: 1 }} onClick={dlTermReport} disabled={loading === 'sheet'}>
+              {loading === 'sheet' ? 'Generating...' : '⬇️ Single Student'}
+            </button>
+            <button
+              style={{ ...s.btn, flex: 1, background: '#16a34a' }}
+              onClick={dlAllReportCards}
+              disabled={loading === 'allCards' || !cardClass}
+            >
+              {loading === 'allCards' ? 'Generating...' : '📦 Entire Class'}
+            </button>
+          </div>
+          <p style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
+            "Entire Class" downloads one PDF with every student's report card — ready to print.
+          </p>
         </div>
 
         {/* School-wide report — admin only */}
