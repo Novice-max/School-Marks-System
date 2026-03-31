@@ -227,7 +227,7 @@ public class ReportService {
 
         buildRubric(doc, bold, regular);
         doc.add(new Paragraph("FACILITATOR'S COMMENT:  " + generateFacilitatorComment(student.getFirstName(), avgLevel, gl))
-                .setFont(regular).setFontSize(9).setMarginTop(12));
+                .setFont(regular).setFontSize(9).setMarginTop(8));
         buildSignatures(doc, bold, regular);
         buildDates(doc, regular);
 
@@ -272,11 +272,28 @@ public class ReportService {
 
         List<Subject> subjects = subjectRepository.findByLevelType(classRoom.getLevelType());
 
+        // ── Calculate subject count first for margin computation ──
+        int subjectTotal = subjects.size();
+        float rowH  = rowHeight(subjectTotal);
+        float bodyF = bodyFont(subjectTotal);
+        float hdrF  = headerFont(subjectTotal);
+
+        int gl = classRoom.getGradeLevel();
+        String levelLabel = getLevelLabel(gl);
+
+        // ── Compute margins to guarantee one-page fit ──
+        float contentHeight = 70 + 30 + (levelLabel.isEmpty() ? 0 : 15) + 20 + 40
+                + (subjectTotal * rowH) + rowH + 10 + 40 + 20 + 40 + 25;
+        float pageHeight = 842f;
+        float availableMargin = Math.max((pageHeight - contentHeight) / 2f, 18f);
+        float topMargin    = Math.min(availableMargin, 36f);
+        float bottomMargin = Math.min(availableMargin, 36f);
+
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         PdfWriter writer = new PdfWriter(baos);
         PdfDocument pdf = new PdfDocument(writer);
         Document doc = new Document(pdf);
-        doc.setMargins(36, 36, 36, 36);
+        doc.setMargins(topMargin, 36, bottomMargin, 36);
 
         PdfFont bold    = PdfFontFactory.createFont(com.itextpdf.io.font.constants.StandardFonts.HELVETICA_BOLD);
         PdfFont regular = PdfFontFactory.createFont(com.itextpdf.io.font.constants.StandardFonts.HELVETICA);
@@ -288,16 +305,11 @@ public class ReportService {
                 .setFont(bold).setFontSize(10).setTextAlignment(TextAlignment.CENTER)
                 .setBorder(new SolidBorder(ColorConstants.BLACK, 1.5f)).setPadding(5).setMarginTop(8));
 
-        int gl = classRoom.getGradeLevel();
-        String levelLabel = getLevelLabel(gl);
         if (!levelLabel.isEmpty())
             doc.add(new Paragraph(levelLabel).setFont(bold).setFontSize(10).setTextAlignment(TextAlignment.CENTER).setMarginTop(2));
 
         String gradeLabel = gl == -1 ? "PP1" : gl == 0 ? "PP2" : "GRADE " + gl;
         buildNameGradeRow(doc, bold, student.getFullName(), gradeLabel);
-
-        int subjectTotal = subjects.size();
-        float rowH = rowHeight(subjectTotal); float bodyF = bodyFont(subjectTotal); float hdrF = headerFont(subjectTotal);
 
         Table marksTable = buildTableHeader(bodyF, hdrF);
 
@@ -358,7 +370,7 @@ public class ReportService {
         buildRubric(doc, bold, regular);
         doc.add(new Paragraph("FACILITATOR'S COMMENT:  " + generateFacilitatorComment(student.getFirstName(),
                 avgCount > 0 ? getDetailedGrade(overallAvg) : "ME1", gl))
-                .setFont(regular).setFontSize(9).setMarginTop(12));
+                .setFont(regular).setFontSize(9).setMarginTop(8));
         buildSignatures(doc, bold, regular);
         buildDates(doc, regular);
 
@@ -709,7 +721,6 @@ public class ReportService {
 
         PdfFont hdrBold = PdfFontFactory.createFont(com.itextpdf.io.font.constants.StandardFonts.HELVETICA_BOLD);
 
-        // Row 1: LEARNING AREAS (spans 2 rows), MID TERM (spans 2 cols), END TERM (spans 2 cols), TERMLY AVERAGE (spans 2 cols)
         t.addHeaderCell(new Cell(2, 1).add(new Paragraph("LEARNING AREAS").setFont(hdrBold).setFontSize(hdrF))
                 .setBackgroundColor(TABLE_HEADER_BG).setTextAlignment(TextAlignment.CENTER).setVerticalAlignment(VerticalAlignment.MIDDLE).setPadding(6));
         t.addHeaderCell(new Cell(1, 2).add(new Paragraph("MID TERM").setFont(hdrBold).setFontSize(hdrF))
@@ -719,15 +730,15 @@ public class ReportService {
         t.addHeaderCell(new Cell(1, 2).add(new Paragraph("TERMLY AVERAGE").setFont(hdrBold).setFontSize(hdrF))
                 .setBackgroundColor(TABLE_HEADER_BG).setTextAlignment(TextAlignment.CENTER).setPadding(6));
 
-        // Row 2: sub-headers — MARKS, LEVEL for each group
         for (String sub : new String[]{"MARKS", "LEVEL", "MARKS", "LEVEL", "MARKS", "LEVEL"})
             t.addHeaderCell(new Cell().add(new Paragraph(sub).setFont(hdrBold).setFontSize(hdrF - 1))
                     .setBackgroundColor(TABLE_HEADER_BG).setTextAlignment(TextAlignment.CENTER).setPadding(4));
         return t;
     }
 
+    // ── CHANGED: reduced margins to help single-student fit on one page ──
     private void buildRubric(Document doc, PdfFont bold, PdfFont regular) {
-        doc.add(new Paragraph(" ").setMarginTop(10));
+        doc.add(new Paragraph(" ").setMarginTop(6));
         Table rubric = new Table(UnitValue.createPercentArray(new float[]{14, 11, 11, 11, 11, 11, 11, 11, 9})).setWidth(UnitValue.createPercentValue(100));
         for (String label : new String[]{"RUBRIC","EE 1","EE 2","ME 1","ME 2","AE 1","AE 2","BE 1","BE 2"})
             rubric.addCell(new Cell().add(new Paragraph(label).setFont(bold).setFontSize(9)).setBackgroundColor(TABLE_HEADER_BG).setTextAlignment(TextAlignment.CENTER).setPadding(4));
@@ -736,8 +747,9 @@ public class ReportService {
         doc.add(rubric);
     }
 
+    // ── CHANGED: setMarginTop(20) → setMarginTop(14) ──
     private void buildSignatures(Document doc, PdfFont bold, PdfFont regular) {
-        Table sigTable = new Table(UnitValue.createPercentArray(new float[]{40, 35, 25})).setWidth(UnitValue.createPercentValue(100)).setMarginTop(20);
+        Table sigTable = new Table(UnitValue.createPercentArray(new float[]{40, 35, 25})).setWidth(UnitValue.createPercentValue(100)).setMarginTop(14);
         sigTable.addCell(new Cell().add(new Paragraph("HEAD TEACHER'S SIGNATURE:").setFont(bold).setFontSize(8))
                 .add(new Paragraph(" ").setFontSize(6)).add(new Paragraph("________________________________").setFont(regular).setFontSize(9)).setBorder(Border.NO_BORDER));
         sigTable.addCell(new Cell().add(new Paragraph("CLASS TEACHER'S SIGNATURE:").setFont(bold).setFontSize(8))
@@ -747,8 +759,9 @@ public class ReportService {
         doc.add(sigTable);
     }
 
+    // ── CHANGED: setMarginTop(10) → setMarginTop(6) ──
     private void buildDates(Document doc, PdfFont regular) {
-        Table datesTable = new Table(UnitValue.createPercentArray(new float[]{50, 50})).setWidth(UnitValue.createPercentValue(100)).setMarginTop(10);
+        Table datesTable = new Table(UnitValue.createPercentArray(new float[]{50, 50})).setWidth(UnitValue.createPercentValue(100)).setMarginTop(6);
         datesTable.addCell(new Cell().add(new Paragraph("CLOSING DATE:  ________________________").setFont(regular).setFontSize(9)).setBorder(Border.NO_BORDER));
         datesTable.addCell(new Cell().add(new Paragraph("OPENING DATE:  ________________________").setFont(regular).setFontSize(9).setTextAlignment(TextAlignment.RIGHT)).setBorder(Border.NO_BORDER));
         doc.add(datesTable);
