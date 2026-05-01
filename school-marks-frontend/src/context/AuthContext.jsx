@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, useRef, useCallback } f
 
 const AuthContext = createContext(null);
 
-const INACTIVITY_LIMIT = 15 * 60 * 1000; // 15 minutes in milliseconds
+const INACTIVITY_LIMIT = 60 * 60 * 1000; // 60 minutes
 
 export function AuthProvider({ children }) {
   const [user,    setUser]    = useState(null);
@@ -31,7 +31,7 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     if (!user) return;
 
-    const events = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click'];
+    const events = ['mousedown', 'mousemove', 'keydown', 'keypress', 'input', 'scroll', 'touchstart', 'click'];
     events.forEach(e => window.addEventListener(e, resetTimer, { passive: true }));
     resetTimer(); // Start the timer
 
