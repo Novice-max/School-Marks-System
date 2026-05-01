@@ -72,14 +72,14 @@ public class MarkService {
                 .orElseThrow(() -> new RuntimeException("Exam not found"));
 
         // SECURITY CHECK: Teacher can only enter marks for their assigned subject+class
+        // We check by teacherId, subjectId, and classId only — NOT by term/academicYear
+        // so that assignments remain valid across terms without needing re-assignment
         if (user.getRole() == User.Role.TEACHER) {
             boolean isAssigned = assignmentRepository
-                .existsByTeacher_TeacherIdAndSubject_SubjectIdAndClassRoom_ClassIdAndAcademicYearAndTerm(
+                .existsByTeacher_TeacherIdAndSubject_SubjectIdAndClassRoom_ClassId(
                     user.getTeacher().getTeacherId(),
                     dto.getSubjectId(),
-                    exam.getClassRoom().getClassId(),
-                    exam.getAcademicYear(),
-                    exam.getTerm()
+                    exam.getClassRoom().getClassId()
                 );
 
             if (!isAssigned) {
