@@ -13,4 +13,7 @@ public interface TeacherSubjectAssignmentRepository extends JpaRepository<Teache
 
     boolean existsByTeacher_TeacherIdAndSubject_SubjectIdAndClassRoom_ClassIdAndAcademicYearAndTerm(
         Long teacherId, Long subjectId, Long classId, String academicYear, Integer term);
+
+    boolean existsByTeacher_TeacherIdAndSubject_SubjectIdAndClassRoom_ClassId(
+        Long teacherId, Long subjectId, Long classId);
 }
