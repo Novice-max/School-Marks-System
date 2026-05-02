@@ -50,54 +50,9 @@ export default function LoginPage() {
             <filter id="cardShadow" x="-10%" y="-10%" width="120%" height="120%">
               <feDropShadow dx="0" dy="6" stdDeviation="12" floodColor="rgba(0,0,0,0.2)" />
             </filter>
-
-            <filter id="wavySnake" x="-10%" y="-10%" width="120%" height="120%">
-              <feTurbulence
-                type="turbulence"
-                baseFrequency="0.02"
-                numOctaves="3"
-                result="turbulence"
-              >
-                <animate
-                  attributeName="seed"
-                  from="1"
-                  to="100"
-                  dur="8s"
-                  repeatCount="indefinite"
-                />
-              </feTurbulence>
-              <feDisplacementMap
-                in="SourceGraphic"
-                in2="turbulence"
-                scale="4"
-                xChannelSelector="R"
-                yChannelSelector="G"
-              />
-            </filter>
-
-            <filter id="snakeGlow" x="-20%" y="-20%" width="140%" height="140%">
-              <feGaussianBlur stdDeviation="2" result="blur" />
-              <feMerge>
-                <feMergeNode in="blur" />
-                <feMergeNode in="SourceGraphic" />
-              </feMerge>
-            </filter>
           </defs>
-
-          {/* White card fill */}
           <path d={wavyPath} fill="#fff" filter="url(#cardShadow)" />
-
-          {/* Snake border — continuous dark blue line, wobbling */}
-          <path
-            d={wavyPath}
-            fill="none"
-            stroke="#1a1a6e"
-            strokeWidth="2.5"
-            strokeLinejoin="round"
-            filter="url(#wavySnake)"
-          />
         </svg>
-
         <div style={s.cardContent}>
           <img src="/new logo.jpeg" alt="Calm Waters Academy" style={s.logo} />
           <h1 style={s.school}>Santa Ana Calm Waters Academy</h1>
