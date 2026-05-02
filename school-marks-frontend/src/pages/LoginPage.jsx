@@ -44,15 +44,55 @@ export default function LoginPage() {
 
   return (
     <div style={s.wrapper}>
+      {/* Inject keyframes for the snake animation */}
+      <style>{`
+        @keyframes snakeSlither {
+          0%   { stroke-dashoffset: 0; }
+          100% { stroke-dashoffset: -1800; }
+        }
+      `}</style>
+
       <div style={s.wavyOuter}>
         <svg style={s.wavySvg} viewBox="0 0 420 560" preserveAspectRatio="none">
           <defs>
             <filter id="cardShadow" x="-10%" y="-10%" width="120%" height="120%">
               <feDropShadow dx="0" dy="6" stdDeviation="12" floodColor="rgba(0,0,0,0.2)" />
             </filter>
+            {/* Gradient for the snake border */}
+            <linearGradient id="snakeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%"   stopColor="#60a5fa" />
+              <stop offset="30%"  stopColor="#a78bfa" />
+              <stop offset="60%"  stopColor="#f472b6" />
+              <stop offset="100%" stopColor="#60a5fa" />
+            </linearGradient>
+            {/* Glow filter for the snake */}
+            <filter id="snakeGlow" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="4" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
           </defs>
+
+          {/* White card fill */}
           <path d={wavyPath} fill="#fff" filter="url(#cardShadow)" />
+
+          {/* Snake border — animated stroke */}
+          <path
+            d={wavyPath}
+            fill="none"
+            stroke="url(#snakeGrad)"
+            strokeWidth="3"
+            strokeLinecap="round"
+            filter="url(#snakeGlow)"
+            style={{
+              strokeDasharray: '120 1680',
+              animation: 'snakeSlither 3s linear infinite',
+            }}
+          />
         </svg>
+
         <div style={s.cardContent}>
           <img src="/new logo.jpeg" alt="Calm Waters Academy" style={s.logo} />
           <h1 style={s.school}>Santa Ana Calm Waters Academy</h1>
@@ -119,10 +159,6 @@ export default function LoginPage() {
   );
 }
 
-/*
-  Gentle wavy path — edges drift only ~3-4px from a straight line.
-  Looks like soft water ripples, not jagged or dramatic.
-*/
 const wavyPath = `
   M 14,8
   Q 105,5  210,8
