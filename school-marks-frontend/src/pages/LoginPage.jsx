@@ -44,13 +44,6 @@ export default function LoginPage() {
 
   return (
     <div style={s.wrapper}>
-      <style>{`
-        @keyframes snakeSlither {
-          0%   { stroke-dashoffset: 0; }
-          100% { stroke-dashoffset: -1800; }
-        }
-      `}</style>
-
       <div style={s.wavyOuter}>
         <svg style={s.wavySvg} viewBox="0 0 420 560" preserveAspectRatio="none">
           <defs>
@@ -61,37 +54,29 @@ export default function LoginPage() {
             <filter id="wavySnake" x="-10%" y="-10%" width="120%" height="120%">
               <feTurbulence
                 type="turbulence"
-                baseFrequency="0.03"
+                baseFrequency="0.02"
                 numOctaves="3"
                 result="turbulence"
               >
                 <animate
                   attributeName="seed"
                   from="1"
-                  to="200"
-                  dur="4s"
+                  to="100"
+                  dur="8s"
                   repeatCount="indefinite"
                 />
               </feTurbulence>
               <feDisplacementMap
                 in="SourceGraphic"
                 in2="turbulence"
-                scale="5"
+                scale="4"
                 xChannelSelector="R"
                 yChannelSelector="G"
               />
             </filter>
 
-            <linearGradient id="snakeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%"   stopColor="#60a5fa" />
-              <stop offset="25%"  stopColor="#a78bfa" />
-              <stop offset="50%"  stopColor="#f472b6" />
-              <stop offset="75%"  stopColor="#a78bfa" />
-              <stop offset="100%" stopColor="#60a5fa" />
-            </linearGradient>
-
             <filter id="snakeGlow" x="-20%" y="-20%" width="140%" height="140%">
-              <feGaussianBlur stdDeviation="3" result="blur" />
+              <feGaussianBlur stdDeviation="2" result="blur" />
               <feMerge>
                 <feMergeNode in="blur" />
                 <feMergeNode in="SourceGraphic" />
@@ -99,19 +84,17 @@ export default function LoginPage() {
             </filter>
           </defs>
 
+          {/* White card fill */}
           <path d={wavyPath} fill="#fff" filter="url(#cardShadow)" />
 
+          {/* Snake border — continuous dark blue line, wobbling */}
           <path
             d={wavyPath}
             fill="none"
-            stroke="url(#snakeGrad)"
+            stroke="#1a1a6e"
             strokeWidth="2.5"
-            strokeLinecap="round"
+            strokeLinejoin="round"
             filter="url(#wavySnake)"
-            style={{
-              strokeDasharray: '40 20',
-              animation: 'snakeSlither 6s linear infinite',
-            }}
           />
         </svg>
 
