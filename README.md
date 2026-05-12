@@ -4,10 +4,8 @@ A full-stack school management system built for **Santa Ana Calm Waters Academy*
 
 **Live:** [school-marks-system-mauve.vercel.app](https://school-marks-system-mauve.vercel.app)
 
-<!-- Add screenshots to a /screenshots folder in the repo and uncomment these:
 ![Admin Dashboard](screenshots/dashboard.png)
 ![Login Page](screenshots/login.png)
--->
 
 ## Tech Stack
 
