@@ -21,7 +21,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.List;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -42,9 +43,91 @@ public class ReportService {
     private static final DeviceRgb AE_COLOR        = new DeviceRgb(220, 150, 0);
     private static final DeviceRgb BE_COLOR        = new DeviceRgb(200, 50,  50);
 
-    // ──────────────────────────────────────────────────────────────
-    // CLASS MARKLIST PDF
-    // ──────────────────────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════
+    // HELPER: Detect available exams in order (opener → mid → end)
+    // ══════════════════════════════════════════════════════════════
+    private LinkedHashMap<String, Exam> detectExams(List<Exam> allExams) {
+        LinkedHashMap<String, Exam> detected = new LinkedHashMap<>();
+
+        allExams.stream()
+            .filter(e -> e.getExamName().toLowerCase().contains("opener"))
+            .findFirst()
+            .ifPresent(e -> detected.put("OPENER", e));
+
+        allExams.stream()
+            .filter(e -> {
+                String n = e.getExamName().toLowerCase();
+                return n.contains("mid") && !n.contains("opener");
+            })
+            .findFirst()
+            .ifPresent(e -> detected.put("MID TERM", e));
+
+        allExams.stream()
+            .filter(e -> e.getExamName().toLowerCase().contains("end"))
+            .findFirst()
+            .ifPresent(e -> detected.put("END TERM", e));
+
+        return detected;
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // HELPER: Build dynamic column widths based on exam count
+    // ══════════════════════════════════════════════════════════════
+    private float[] dynamicColWidths(int examCount) {
+        // columns: LEARNING AREAS + (MARKS + LEVEL) * examCount + AVG_MARKS + AVG_LEVEL
+        if (examCount == 1) {
+            return new float[]{32, 14, 14, 20, 20};
+        } else if (examCount == 2) {
+            return new float[]{30, 10, 10, 10, 10, 15, 15};
+        } else { // 3 exams
+            return new float[]{22, 9, 8, 9, 8, 9, 8, 14, 13};
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // HELPER: Build dynamic table header for report cards
+    // ══════════════════════════════════════════════════════════════
+    private Table buildDynamicTableHeader(List<String> examLabels, float bodyF, float hdrF) throws Exception {
+        int examCount = examLabels.size();
+        float[] colWidths = dynamicColWidths(examCount);
+        Table t = new Table(UnitValue.createPercentArray(colWidths))
+                .setWidth(UnitValue.createPercentValue(100)).setMarginTop(8);
+
+        PdfFont hdrBold = PdfFontFactory.createFont(
+                com.itextpdf.io.font.constants.StandardFonts.HELVETICA_BOLD);
+
+        // Row 1: LEARNING AREAS (spans 2 rows) + exam headers + TERMLY AVERAGE
+        t.addHeaderCell(new Cell(2, 1)
+                .add(new Paragraph("LEARNING AREAS").setFont(hdrBold).setFontSize(hdrF))
+                .setBackgroundColor(TABLE_HEADER_BG).setTextAlignment(TextAlignment.CENTER)
+                .setVerticalAlignment(VerticalAlignment.MIDDLE).setPadding(6));
+
+        for (String label : examLabels) {
+            t.addHeaderCell(new Cell(1, 2)
+                    .add(new Paragraph(label).setFont(hdrBold).setFontSize(hdrF))
+                    .setBackgroundColor(TABLE_HEADER_BG).setTextAlignment(TextAlignment.CENTER).setPadding(6));
+        }
+
+        t.addHeaderCell(new Cell(1, 2)
+                .add(new Paragraph("TERMLY AVERAGE").setFont(hdrBold).setFontSize(hdrF))
+                .setBackgroundColor(TABLE_HEADER_BG).setTextAlignment(TextAlignment.CENTER).setPadding(6));
+
+        // Row 2: MARKS / LEVEL sub-headers
+        for (int i = 0; i < examCount + 1; i++) { // +1 for termly average
+            t.addHeaderCell(new Cell()
+                    .add(new Paragraph("MARKS").setFont(hdrBold).setFontSize(hdrF - 1))
+                    .setBackgroundColor(TABLE_HEADER_BG).setTextAlignment(TextAlignment.CENTER).setPadding(4));
+            t.addHeaderCell(new Cell()
+                    .add(new Paragraph("LEVEL").setFont(hdrBold).setFontSize(hdrF - 1))
+                    .setBackgroundColor(TABLE_HEADER_BG).setTextAlignment(TextAlignment.CENTER).setPadding(4));
+        }
+
+        return t;
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // CLASS MARKLIST PDF — fixed column widths
+    // ══════════════════════════════════════════════════════════════
     public byte[] generateClassMarklistPdf(Long examId) throws Exception {
         Exam exam = examRepository.findById(examId)
                 .orElseThrow(() -> new RuntimeException("Exam not found"));
@@ -73,42 +156,104 @@ public class ReportService {
         }
 
         List<SubjectMarkDTO> sampleSubjects = marklist.get(0).getSubjectMarks();
-        int colCount = 3 + sampleSubjects.size() + 3;
-        Table table = new Table(UnitValue.createPercentArray(colCount)).setWidth(UnitValue.createPercentValue(100));
+        int subjectCount = sampleSubjects.size();
+        int colCount = 3 + subjectCount + 3; // #, adm, name, subjects..., total, avg, overall
 
-        for (String h : new String[]{"#", "Admission No.", "Student Name"}) addHeaderCell(table, h, bold);
-        for (SubjectMarkDTO s : sampleSubjects) addHeaderCell(table, s.getSubjectName(), bold);
-        for (String h : new String[]{"Total", "Average", "Overall"}) addHeaderCell(table, h, bold);
+        // ── Proportional column widths — prevents overflow ──
+        float[] widths = new float[colCount];
+        widths[0] = 2f;    // #
+        widths[1] = 5f;    // Admission No.
+        widths[2] = 10f;   // Student Name
+        for (int i = 3; i < 3 + subjectCount; i++) {
+            widths[i] = 6f; // each subject
+        }
+        widths[colCount - 3] = 5f;  // Total
+        widths[colCount - 2] = 5f;  // Average
+        widths[colCount - 1] = 4f;  // Overall
+
+        Table table = new Table(UnitValue.createPercentArray(widths))
+                .setWidth(UnitValue.createPercentValue(100));
+
+        // ── Scale font for many subjects ──
+        float cellFont = subjectCount > 8 ? 7f : subjectCount > 6 ? 8f : 9f;
+
+        for (String h : new String[]{"#", "Adm No.", "Student Name"}) {
+            table.addHeaderCell(new Cell()
+                    .add(new Paragraph(h).setFont(bold).setFontSize(cellFont))
+                    .setBackgroundColor(HEADER_COLOR).setFontColor(ColorConstants.WHITE)
+                    .setTextAlignment(TextAlignment.CENTER).setPadding(4));
+        }
+        for (SubjectMarkDTO s : sampleSubjects) {
+            table.addHeaderCell(new Cell()
+                    .add(new Paragraph(s.getSubjectName()).setFont(bold).setFontSize(cellFont))
+                    .setBackgroundColor(HEADER_COLOR).setFontColor(ColorConstants.WHITE)
+                    .setTextAlignment(TextAlignment.CENTER).setPadding(4));
+        }
+        for (String h : new String[]{"Total", "Average", "Overall"}) {
+            table.addHeaderCell(new Cell()
+                    .add(new Paragraph(h).setFont(bold).setFontSize(cellFont))
+                    .setBackgroundColor(HEADER_COLOR).setFontColor(ColorConstants.WHITE)
+                    .setTextAlignment(TextAlignment.CENTER).setPadding(4));
+        }
 
         boolean alt = false;
         for (StudentMarkSummaryDTO student : marklist) {
             DeviceRgb rowColor = alt ? ALT_ROW_COLOR : null;
-            addCell(table, String.valueOf(student.getPosition()), regular, rowColor);
-            addCell(table, student.getAdmissionNumber(), regular, rowColor);
-            addCell(table, student.getFullName(), regular, rowColor);
 
-            double totalPoints = 0; int subjectCount = 0;
+            Cell posCell = new Cell().add(new Paragraph(String.valueOf(student.getPosition())).setFont(regular).setFontSize(cellFont))
+                    .setTextAlignment(TextAlignment.CENTER).setVerticalAlignment(VerticalAlignment.MIDDLE).setPadding(3);
+            if (rowColor != null) posCell.setBackgroundColor(rowColor);
+            table.addCell(posCell);
+
+            Cell admCell = new Cell().add(new Paragraph(student.getAdmissionNumber()).setFont(regular).setFontSize(cellFont))
+                    .setTextAlignment(TextAlignment.CENTER).setVerticalAlignment(VerticalAlignment.MIDDLE).setPadding(3);
+            if (rowColor != null) admCell.setBackgroundColor(rowColor);
+            table.addCell(admCell);
+
+            Cell nameCell = new Cell().add(new Paragraph(student.getFullName()).setFont(regular).setFontSize(cellFont))
+                    .setTextAlignment(TextAlignment.LEFT).setVerticalAlignment(VerticalAlignment.MIDDLE).setPadding(3);
+            if (rowColor != null) nameCell.setBackgroundColor(rowColor);
+            table.addCell(nameCell);
+
+            double totalPoints = 0; int subCount = 0;
             for (SubjectMarkDTO sm : student.getSubjectMarks()) {
                 if (sm.getScore() != null) {
-                    Cell cell = new Cell().add(new Paragraph(sm.getScore().toPlainString()).setFont(regular).setFontSize(9))
-                            .setTextAlignment(TextAlignment.CENTER).setVerticalAlignment(VerticalAlignment.MIDDLE);
+                    Cell cell = new Cell().add(new Paragraph(sm.getScore().toPlainString()).setFont(regular).setFontSize(cellFont))
+                            .setTextAlignment(TextAlignment.CENTER).setVerticalAlignment(VerticalAlignment.MIDDLE).setPadding(3);
                     if (rowColor != null) cell.setBackgroundColor(rowColor);
                     if (sm.getGrade() != null) cell.setFontColor(getGradeColor(sm.getGrade()));
                     table.addCell(cell);
-                    totalPoints += sm.getScore().doubleValue(); subjectCount++;
-                } else { addCell(table, "-", regular, rowColor); }
+                    totalPoints += sm.getScore().doubleValue(); subCount++;
+                } else {
+                    Cell cell = new Cell().add(new Paragraph("-").setFont(regular).setFontSize(cellFont))
+                            .setTextAlignment(TextAlignment.CENTER).setVerticalAlignment(VerticalAlignment.MIDDLE).setPadding(3);
+                    if (rowColor != null) cell.setBackgroundColor(rowColor);
+                    table.addCell(cell);
+                }
             }
-            double avg = subjectCount > 0 ? BigDecimal.valueOf(totalPoints / subjectCount).setScale(2, RoundingMode.HALF_UP).doubleValue() : 0;
+
+            double avg = subCount > 0 ? BigDecimal.valueOf(totalPoints / subCount).setScale(2, RoundingMode.HALF_UP).doubleValue() : 0;
             String overallGrade = getSimpleCbcGrade(avg, exam.getClassRoom().getGradeLevel());
-            addCell(table, String.format("%.1f", totalPoints), regular, rowColor);
-            addCell(table, String.format("%.2f", avg), regular, rowColor);
-            Cell gradeCell = new Cell().add(new Paragraph(overallGrade).setFont(bold).setFontSize(9))
+
+            Cell totalCell = new Cell().add(new Paragraph(String.format("%.1f", totalPoints)).setFont(regular).setFontSize(cellFont))
+                    .setTextAlignment(TextAlignment.CENTER).setVerticalAlignment(VerticalAlignment.MIDDLE).setPadding(3);
+            if (rowColor != null) totalCell.setBackgroundColor(rowColor);
+            table.addCell(totalCell);
+
+            Cell avgCell = new Cell().add(new Paragraph(String.format("%.2f", avg)).setFont(regular).setFontSize(cellFont))
+                    .setTextAlignment(TextAlignment.CENTER).setVerticalAlignment(VerticalAlignment.MIDDLE).setPadding(3);
+            if (rowColor != null) avgCell.setBackgroundColor(rowColor);
+            table.addCell(avgCell);
+
+            Cell gradeCell = new Cell().add(new Paragraph(overallGrade).setFont(bold).setFontSize(cellFont))
                     .setTextAlignment(TextAlignment.CENTER).setVerticalAlignment(VerticalAlignment.MIDDLE)
-                    .setFontColor(getGradeColor(overallGrade));
+                    .setFontColor(getGradeColor(overallGrade)).setPadding(3);
             if (rowColor != null) gradeCell.setBackgroundColor(rowColor);
             table.addCell(gradeCell);
+
             alt = !alt;
         }
+
         doc.add(table);
         double classAvg = marklist.stream().mapToDouble(s -> s.getAverage() != null ? s.getAverage() : 0).average().orElse(0);
         doc.add(new Paragraph("Class Average: " + BigDecimal.valueOf(classAvg).setScale(2, RoundingMode.HALF_UP)
@@ -117,9 +262,9 @@ public class ReportService {
         return baos.toByteArray();
     }
 
-    // ──────────────────────────────────────────────────────────────
-    // LEGACY SINGLE-EXAM MARKSHEET PDF
-    // ──────────────────────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════
+    // LEGACY SINGLE-EXAM MARKSHEET PDF (unchanged)
+    // ══════════════════════════════════════════════════════════════
     public byte[] generateStudentMarksheetPdf(Long studentId, Long examId) throws Exception {
         Exam exam = examRepository.findById(examId).orElseThrow(() -> new RuntimeException("Exam not found"));
         Student student = studentRepository.findById(studentId).orElseThrow(() -> new RuntimeException("Student not found"));
@@ -235,9 +380,9 @@ public class ReportService {
         return baos.toByteArray();
     }
 
-    // ──────────────────────────────────────────────────────────────
-    // COMBINED TERM REPORT CARD (Mid-Term + End-Term in one PDF)
-    // ──────────────────────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════
+    // COMBINED TERM REPORT CARD — dynamic 1/2/3 exams
+    // ══════════════════════════════════════════════════════════════
     public byte[] generateTermReportPdf(Long studentId, Long classId, Integer term, String academicYear) throws Exception {
         Student student = studentRepository.findById(studentId)
                 .orElseThrow(() -> new RuntimeException("Student not found"));
@@ -246,33 +391,27 @@ public class ReportService {
 
         List<Exam> allExams = examRepository.findByClassRoom_ClassIdAndTermAndAcademicYear(classId, term, academicYear);
 
-        java.util.Optional<Exam> midExamOpt = allExams.stream()
-                .filter(e -> e.getExamName().toLowerCase().contains("opener") || e.getExamName().toLowerCase().contains("mid"))
-                .findFirst();
-        java.util.Optional<Exam> endExamOpt = allExams.stream()
-                .filter(e -> e.getExamName().toLowerCase().contains("end"))
-                .findFirst();
-
-        if (midExamOpt.isEmpty() && endExamOpt.isEmpty())
+        // ── Detect available exams in order ──
+        LinkedHashMap<String, Exam> detectedExams = detectExams(allExams);
+        if (detectedExams.isEmpty())
             throw new RuntimeException("No exams found for Term " + term + " " + academicYear);
 
-        java.util.Map<String, BigDecimal> midMarks = new java.util.HashMap<>();
-        java.util.Map<String, BigDecimal> endMarks = new java.util.HashMap<>();
+        List<String> examLabels = new ArrayList<>(detectedExams.keySet());
+        int examCount = examLabels.size();
 
-        if (midExamOpt.isPresent()) {
-            markService.getClassMarkList(midExamOpt.get().getExamId()).stream()
+        // ── Fetch marks for each exam ──
+        LinkedHashMap<String, Map<String, BigDecimal>> allExamMarks = new LinkedHashMap<>();
+        for (Map.Entry<String, Exam> entry : detectedExams.entrySet()) {
+            Map<String, BigDecimal> marks = new HashMap<>();
+            markService.getClassMarkList(entry.getValue().getExamId()).stream()
                 .filter(s -> s.getStudentId().equals(studentId)).findFirst()
-                .ifPresent(sd -> sd.getSubjectMarks().forEach(sm -> { if (sm.getScore() != null) midMarks.put(sm.getSubjectName(), sm.getScore()); }));
-        }
-        if (endExamOpt.isPresent()) {
-            markService.getClassMarkList(endExamOpt.get().getExamId()).stream()
-                .filter(s -> s.getStudentId().equals(studentId)).findFirst()
-                .ifPresent(sd -> sd.getSubjectMarks().forEach(sm -> { if (sm.getScore() != null) endMarks.put(sm.getSubjectName(), sm.getScore()); }));
+                .ifPresent(sd -> sd.getSubjectMarks().forEach(sm -> {
+                    if (sm.getScore() != null) marks.put(sm.getSubjectName(), sm.getScore());
+                }));
+            allExamMarks.put(entry.getKey(), marks);
         }
 
         List<Subject> subjects = subjectRepository.findByLevelType(classRoom.getLevelType());
-
-        // ── Calculate subject count first for margin computation ──
         int subjectTotal = subjects.size();
         float rowH  = rowHeight(subjectTotal);
         float bodyF = bodyFont(subjectTotal);
@@ -281,7 +420,7 @@ public class ReportService {
         int gl = classRoom.getGradeLevel();
         String levelLabel = getLevelLabel(gl);
 
-        // ── Compute margins to guarantee one-page fit ──
+        // ── Margins ──
         float contentHeight = 70 + 30 + (levelLabel.isEmpty() ? 0 : 15) + 20 + 40
                 + (subjectTotal * rowH) + rowH + 10 + 40 + 20 + 40 + 25;
         float pageHeight = 842f;
@@ -311,65 +450,75 @@ public class ReportService {
         String gradeLabel = gl == -1 ? "PP1" : gl == 0 ? "PP2" : "GRADE " + gl;
         buildNameGradeRow(doc, bold, student.getFullName(), gradeLabel);
 
-        Table marksTable = buildTableHeader(bodyF, hdrF);
+        // ── Dynamic table ──
+        Table marksTable = buildDynamicTableHeader(examLabels, bodyF, hdrF);
 
         boolean alt = false;
-        double totalMid = 0, totalEnd = 0, totalAvg = 0;
-        int midCount = 0, endCount = 0;
+        double[] examTotals = new double[examCount];
+        int[] examCounts = new int[examCount];
+        double totalAvg = 0; int avgDenominator = 0;
 
         for (Subject sub : subjects) {
             DeviceRgb rowBg = alt ? ALT_ROW_COLOR : null;
             String name = sub.getSubjectName();
-            BigDecimal midScore = midMarks.get(name);
-            BigDecimal endScore = endMarks.get(name);
 
-            String midStr   = midScore != null ? midScore.toPlainString() : "";
-            String midLevel = midScore != null ? getDetailedGrade(midScore.doubleValue()) : "";
-            String endStr   = endScore != null ? endScore.toPlainString() : "";
-            String endLevel = endScore != null ? getDetailedGrade(endScore.doubleValue()) : "";
+            addMarkCell(marksTable, name, regular, bodyF, rowBg, TextAlignment.LEFT, rowH);
 
-            double avg = 0;
-            if (midScore != null && endScore != null)      avg = (midScore.doubleValue() + endScore.doubleValue()) / 2.0;
-            else if (midScore != null)                     avg = midScore.doubleValue();
-            else if (endScore != null)                     avg = endScore.doubleValue();
+            double subjectAvgSum = 0; int subjectAvgCount = 0;
 
-            String avgStr   = (midScore != null || endScore != null) ? String.format("%.1f", avg) : "";
-            String avgLevel = (midScore != null || endScore != null) ? getDetailedGrade(avg) : "";
+            for (int i = 0; i < examCount; i++) {
+                String label = examLabels.get(i);
+                BigDecimal score = allExamMarks.get(label).get(name);
+                String scoreStr = score != null ? score.toPlainString() : "";
+                String levelStr = score != null ? getDetailedGrade(score.doubleValue()) : "";
 
-            addMarkCell(marksTable, name,     regular, bodyF,     rowBg, TextAlignment.LEFT,   rowH);
-            addMarkCell(marksTable, midStr,   regular, bodyF,     rowBg, TextAlignment.CENTER, rowH);
-            addMarkCell(marksTable, midLevel, bold,    bodyF - 1, rowBg, TextAlignment.CENTER, rowH);
-            addMarkCell(marksTable, endStr,   regular, bodyF,     rowBg, TextAlignment.CENTER, rowH);
-            addMarkCell(marksTable, endLevel, bold,    bodyF - 1, rowBg, TextAlignment.CENTER, rowH);
-            addMarkCell(marksTable, avgStr,   regular, bodyF,     rowBg, TextAlignment.CENTER, rowH);
-            addMarkCell(marksTable, avgLevel, bold,    bodyF - 1, rowBg, TextAlignment.CENTER, rowH);
+                addMarkCell(marksTable, scoreStr, regular, bodyF,     rowBg, TextAlignment.CENTER, rowH);
+                addMarkCell(marksTable, levelStr, bold,    bodyF - 1, rowBg, TextAlignment.CENTER, rowH);
 
-            if (midScore != null) { totalMid += midScore.doubleValue(); midCount++; }
-            if (endScore != null) { totalEnd += endScore.doubleValue(); endCount++; }
-            if (midScore != null || endScore != null) totalAvg += avg;
+                if (score != null) {
+                    examTotals[i] += score.doubleValue();
+                    examCounts[i]++;
+                    subjectAvgSum += score.doubleValue();
+                    subjectAvgCount++;
+                }
+            }
+
+            // Termly average for this subject
+            if (subjectAvgCount > 0) {
+                double subjAvg = subjectAvgSum / subjectAvgCount;
+                addMarkCell(marksTable, String.format("%.1f", subjAvg), regular, bodyF, rowBg, TextAlignment.CENTER, rowH);
+                addMarkCell(marksTable, getDetailedGrade(subjAvg), bold, bodyF - 1, rowBg, TextAlignment.CENTER, rowH);
+                totalAvg += subjAvg;
+                avgDenominator++;
+            } else {
+                addMarkCell(marksTable, "", regular, bodyF, rowBg, TextAlignment.CENTER, rowH);
+                addMarkCell(marksTable, "", bold, bodyF - 1, rowBg, TextAlignment.CENTER, rowH);
+            }
+
             alt = !alt;
         }
 
-        int avgCount = Math.max(midCount, endCount);
-        double overallAvg = avgCount > 0 ? totalAvg / avgCount : 0;
-        String totalMidStr   = midCount > 0 ? String.format("%.0f", totalMid) : "";
-        String totalEndStr   = endCount > 0 ? String.format("%.0f", totalEnd) : "";
-        String totalAvgStr   = avgCount > 0 ? String.format("%.1f", overallAvg) : "";
-        String totalAvgLevel = avgCount > 0 ? getDetailedGrade(overallAvg) : "";
+        // ── TOTAL row ──
+        double overallAvg = avgDenominator > 0 ? totalAvg / avgDenominator : 0;
 
         marksTable.addCell(new Cell().add(new Paragraph("TOTAL").setFont(bold).setFontSize(bodyF))
                 .setBackgroundColor(TOTAL_ROW_BG).setPadding(6).setMinHeight(rowH));
-        addMarkCell(marksTable, totalMidStr,   bold, bodyF,     TOTAL_ROW_BG, TextAlignment.CENTER, rowH);
-        addMarkCell(marksTable, "",            bold, bodyF - 1, TOTAL_ROW_BG, TextAlignment.CENTER, rowH);
-        addMarkCell(marksTable, totalEndStr,   bold, bodyF,     TOTAL_ROW_BG, TextAlignment.CENTER, rowH);
-        addMarkCell(marksTable, "",            bold, bodyF - 1, TOTAL_ROW_BG, TextAlignment.CENTER, rowH);
-        addMarkCell(marksTable, totalAvgStr,   bold, bodyF,     TOTAL_ROW_BG, TextAlignment.CENTER, rowH);
-        addMarkCell(marksTable, totalAvgLevel, bold, bodyF - 1, TOTAL_ROW_BG, TextAlignment.CENTER, rowH);
+
+        for (int i = 0; i < examCount; i++) {
+            addMarkCell(marksTable, examCounts[i] > 0 ? String.format("%.0f", examTotals[i]) : "",
+                    bold, bodyF, TOTAL_ROW_BG, TextAlignment.CENTER, rowH);
+            addMarkCell(marksTable, "", bold, bodyF - 1, TOTAL_ROW_BG, TextAlignment.CENTER, rowH);
+        }
+
+        addMarkCell(marksTable, avgDenominator > 0 ? String.format("%.1f", overallAvg) : "",
+                bold, bodyF, TOTAL_ROW_BG, TextAlignment.CENTER, rowH);
+        addMarkCell(marksTable, avgDenominator > 0 ? getDetailedGrade(overallAvg) : "",
+                bold, bodyF - 1, TOTAL_ROW_BG, TextAlignment.CENTER, rowH);
 
         doc.add(marksTable);
         buildRubric(doc, bold, regular);
         doc.add(new Paragraph("FACILITATOR'S COMMENT:  " + generateFacilitatorComment(student.getFirstName(),
-                avgCount > 0 ? getDetailedGrade(overallAvg) : "ME1", gl))
+                avgDenominator > 0 ? getDetailedGrade(overallAvg) : "ME1", gl))
                 .setFont(regular).setFontSize(9).setMarginTop(8));
         buildSignatures(doc, bold, regular);
         buildDates(doc, regular);
@@ -378,12 +527,10 @@ public class ReportService {
         return baos.toByteArray();
     }
 
-    // ──────────────────────────────────────────────────────────────
-    // ALL TERM REPORT CARDS FOR A CLASS (one PDF, one student per page)
-    // Pre-fetches all data once — 5 queries total instead of 125+
-    // ──────────────────────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════
+    // ALL TERM REPORT CARDS — dynamic 1/2/3 exams, batch
+    // ══════════════════════════════════════════════════════════════
     public byte[] generateAllTermReportsPdf(Long classId, Integer term, String academicYear) throws Exception {
-        // ── 1. Pre-fetch ALL shared data once ──
         ClassRoom classRoom = classRoomRepository.findById(classId)
                 .orElseThrow(() -> new RuntimeException("Class not found"));
 
@@ -399,49 +546,41 @@ public class ReportService {
         int subjectTotal = subjects.size();
 
         List<Exam> allExams = examRepository.findByClassRoom_ClassIdAndTermAndAcademicYear(classId, term, academicYear);
-        java.util.Optional<Exam> midExamOpt = allExams.stream()
-                .filter(e -> e.getExamName().toLowerCase().contains("opener") || e.getExamName().toLowerCase().contains("mid"))
-                .findFirst();
-        java.util.Optional<Exam> endExamOpt = allExams.stream()
-                .filter(e -> e.getExamName().toLowerCase().contains("end"))
-                .findFirst();
 
-        if (midExamOpt.isEmpty() && endExamOpt.isEmpty())
+        // ── Detect exams ──
+        LinkedHashMap<String, Exam> detectedExams = detectExams(allExams);
+        if (detectedExams.isEmpty())
             throw new RuntimeException("No exams found for Term " + term + " " + academicYear);
 
-        // ── 2. Pre-fetch ALL marks for entire class at once ──
-        java.util.Map<Long, java.util.Map<String, BigDecimal>> allMidMarks = new java.util.HashMap<>();
-        java.util.Map<Long, java.util.Map<String, BigDecimal>> allEndMarks = new java.util.HashMap<>();
+        List<String> examLabels = new ArrayList<>(detectedExams.keySet());
+        int examCount = examLabels.size();
 
-        if (midExamOpt.isPresent()) {
-            List<StudentMarkSummaryDTO> midList = markService.getClassMarkList(midExamOpt.get().getExamId());
-            for (StudentMarkSummaryDTO sd : midList) {
-                java.util.Map<String, BigDecimal> subMap = new java.util.HashMap<>();
-                sd.getSubjectMarks().forEach(sm -> { if (sm.getScore() != null) subMap.put(sm.getSubjectName(), sm.getScore()); });
-                allMidMarks.put(sd.getStudentId(), subMap);
+        // ── Pre-fetch ALL marks per exam type ──
+        // Key: examLabel → studentId → subjectName → score
+        LinkedHashMap<String, Map<Long, Map<String, BigDecimal>>> allMarksPerExam = new LinkedHashMap<>();
+        for (Map.Entry<String, Exam> entry : detectedExams.entrySet()) {
+            Map<Long, Map<String, BigDecimal>> perStudent = new HashMap<>();
+            List<StudentMarkSummaryDTO> list = markService.getClassMarkList(entry.getValue().getExamId());
+            for (StudentMarkSummaryDTO sd : list) {
+                Map<String, BigDecimal> subMap = new HashMap<>();
+                sd.getSubjectMarks().forEach(sm -> {
+                    if (sm.getScore() != null) subMap.put(sm.getSubjectName(), sm.getScore());
+                });
+                perStudent.put(sd.getStudentId(), subMap);
             }
-        }
-        if (endExamOpt.isPresent()) {
-            List<StudentMarkSummaryDTO> endList = markService.getClassMarkList(endExamOpt.get().getExamId());
-            for (StudentMarkSummaryDTO sd : endList) {
-                java.util.Map<String, BigDecimal> subMap = new java.util.HashMap<>();
-                sd.getSubjectMarks().forEach(sm -> { if (sm.getScore() != null) subMap.put(sm.getSubjectName(), sm.getScore()); });
-                allEndMarks.put(sd.getStudentId(), subMap);
-            }
+            allMarksPerExam.put(entry.getKey(), perStudent);
         }
 
-        // ── 3. Pre-load logo once ──
+        // ── Pre-load resources ──
         byte[] logoBytes = null;
         try (InputStream logoStream = ReportService.class.getResourceAsStream("/static/school_logo.png")) {
             if (logoStream != null) logoBytes = logoStream.readAllBytes();
         } catch (Exception ignored) {}
 
-        // ── 4. Pre-create fonts once ──
         PdfFont bold    = PdfFontFactory.createFont(com.itextpdf.io.font.constants.StandardFonts.HELVETICA_BOLD);
         PdfFont regular = PdfFontFactory.createFont(com.itextpdf.io.font.constants.StandardFonts.HELVETICA);
         PdfFont italic  = PdfFontFactory.createFont(com.itextpdf.io.font.constants.StandardFonts.HELVETICA_OBLIQUE);
 
-        // ── 5. Compute sizing once ──
         float rowH  = rowHeight(subjectTotal);
         float bodyF = bodyFont(subjectTotal);
         float hdrF  = headerFont(subjectTotal);
@@ -450,44 +589,50 @@ public class ReportService {
         String levelLabel = getLevelLabel(gl);
         String gradeLabel = gl == -1 ? "PP1" : gl == 0 ? "PP2" : "GRADE " + gl;
 
-        // ── 6. Compute margins to guarantee one-page fit ──
+        // ── Margins ──
         float contentHeight = 70 + 30 + (levelLabel.isEmpty() ? 0 : 15) + 20 + 40
                 + (subjectTotal * rowH) + rowH + 10 + 40 + 20 + 40 + 25;
         float pageHeight = 842f;
         float availableMargin = Math.max((pageHeight - contentHeight) / 2f, 18f);
-        float topMargin = Math.min(availableMargin, 36f);
+        float topMargin    = Math.min(availableMargin, 36f);
         float bottomMargin = Math.min(availableMargin, 36f);
 
-        // ── 7. Build single PDF ──
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         PdfWriter writer = new PdfWriter(baos);
         PdfDocument pdf = new PdfDocument(writer);
         Document doc = new Document(pdf, com.itextpdf.kernel.geom.PageSize.A4);
         doc.setMargins(topMargin, 36, bottomMargin, 36);
 
+        float[] colWidths = dynamicColWidths(examCount);
+
         int count = 0;
         for (Student student : students) {
-            java.util.Map<String, BigDecimal> midMarks = allMidMarks.getOrDefault(student.getStudentId(), java.util.Collections.emptyMap());
-            java.util.Map<String, BigDecimal> endMarks = allEndMarks.getOrDefault(student.getStudentId(), java.util.Collections.emptyMap());
-
+            // Check if student has any marks across all exam types
             boolean hasAnyMark = false;
-            for (Subject sub : subjects) {
-                if (midMarks.containsKey(sub.getSubjectName()) || endMarks.containsKey(sub.getSubjectName())) {
-                    hasAnyMark = true; break;
+            for (String label : examLabels) {
+                Map<String, BigDecimal> studentMarks = allMarksPerExam.get(label)
+                        .getOrDefault(student.getStudentId(), Collections.emptyMap());
+                for (Subject sub : subjects) {
+                    if (studentMarks.containsKey(sub.getSubjectName())) {
+                        hasAnyMark = true; break;
+                    }
                 }
+                if (hasAnyMark) break;
             }
             if (!hasAnyMark) continue;
 
             if (count > 0) doc.add(new AreaBreak(AreaBreakType.NEXT_PAGE));
 
             // ── Header ──
-            Table headerTable = new Table(UnitValue.createPercentArray(new float[]{18, 82})).setWidth(UnitValue.createPercentValue(100));
+            Table headerTable = new Table(UnitValue.createPercentArray(new float[]{18, 82}))
+                    .setWidth(UnitValue.createPercentValue(100));
             if (logoBytes != null) {
                 Image logo = new Image(ImageDataFactory.create(logoBytes)).setWidth(52).setHeight(52);
                 headerTable.addCell(new Cell().add(logo).setBorder(Border.NO_BORDER)
                         .setVerticalAlignment(VerticalAlignment.MIDDLE).setHorizontalAlignment(HorizontalAlignment.CENTER));
-            } else { headerTable.addCell(new Cell().setBorder(Border.NO_BORDER)); }
-
+            } else {
+                headerTable.addCell(new Cell().setBorder(Border.NO_BORDER));
+            }
             headerTable.addCell(new Cell()
                     .add(new Paragraph("SANTA ANA CALM WATERS ACADEMY").setFont(bold).setFontSize(12).setTextAlignment(TextAlignment.CENTER))
                     .add(new Paragraph("PO BOX 65039 - 00618 Ruaraka").setFont(regular).setFontSize(7).setTextAlignment(TextAlignment.CENTER))
@@ -497,7 +642,6 @@ public class ReportService {
                     .setBorder(Border.NO_BORDER));
             doc.add(headerTable);
 
-            // ── Title ──
             doc.add(new Paragraph("SCHOOL BASED TERM " + term + " ASSESSMENT REPORT YEAR " + academicYear)
                     .setFont(bold).setFontSize(9).setTextAlignment(TextAlignment.CENTER)
                     .setBorder(new SolidBorder(ColorConstants.BLACK, 1.2f)).setPadding(4).setMarginTop(6));
@@ -505,107 +649,140 @@ public class ReportService {
             if (!levelLabel.isEmpty())
                 doc.add(new Paragraph(levelLabel).setFont(bold).setFontSize(9).setTextAlignment(TextAlignment.CENTER).setMarginTop(1));
 
-            // ── Name / Grade ──
-            Table nameGrade = new Table(UnitValue.createPercentArray(new float[]{70, 30})).setWidth(UnitValue.createPercentValue(100)).setMarginTop(5);
-            nameGrade.addCell(new Cell().add(new Paragraph("LEARNER'S NAME:  " + student.getFullName().toUpperCase()).setFont(bold).setFontSize(9)).setBorder(Border.NO_BORDER));
-            nameGrade.addCell(new Cell().add(new Paragraph(gradeLabel).setFont(bold).setFontSize(9).setTextAlignment(TextAlignment.RIGHT)).setBorder(Border.NO_BORDER));
+            Table nameGrade = new Table(UnitValue.createPercentArray(new float[]{70, 30}))
+                    .setWidth(UnitValue.createPercentValue(100)).setMarginTop(5);
+            nameGrade.addCell(new Cell().add(new Paragraph("LEARNER'S NAME:  " + student.getFullName().toUpperCase())
+                    .setFont(bold).setFontSize(9)).setBorder(Border.NO_BORDER));
+            nameGrade.addCell(new Cell().add(new Paragraph(gradeLabel).setFont(bold).setFontSize(9)
+                    .setTextAlignment(TextAlignment.RIGHT)).setBorder(Border.NO_BORDER));
             doc.add(nameGrade);
 
-            // ── Marks table ──
-            float[] colWidths = {30, 10, 10, 10, 10, 15, 15};
-            Table marksTable = new Table(UnitValue.createPercentArray(colWidths)).setWidth(UnitValue.createPercentValue(100)).setMarginTop(5);
+            // ── Dynamic marks table ──
+            Table marksTable = new Table(UnitValue.createPercentArray(colWidths))
+                    .setWidth(UnitValue.createPercentValue(100)).setMarginTop(5);
 
+            // Header row 1
             marksTable.addHeaderCell(new Cell(2, 1).add(new Paragraph("LEARNING AREAS").setFont(bold).setFontSize(hdrF))
-                    .setBackgroundColor(TABLE_HEADER_BG).setTextAlignment(TextAlignment.CENTER).setVerticalAlignment(VerticalAlignment.MIDDLE).setPadding(4));
-            marksTable.addHeaderCell(new Cell(1, 2).add(new Paragraph("MID TERM").setFont(bold).setFontSize(hdrF))
-                    .setBackgroundColor(TABLE_HEADER_BG).setTextAlignment(TextAlignment.CENTER).setPadding(4));
-            marksTable.addHeaderCell(new Cell(1, 2).add(new Paragraph("END TERM").setFont(bold).setFontSize(hdrF))
-                    .setBackgroundColor(TABLE_HEADER_BG).setTextAlignment(TextAlignment.CENTER).setPadding(4));
+                    .setBackgroundColor(TABLE_HEADER_BG).setTextAlignment(TextAlignment.CENTER)
+                    .setVerticalAlignment(VerticalAlignment.MIDDLE).setPadding(4));
+            for (String label : examLabels) {
+                marksTable.addHeaderCell(new Cell(1, 2).add(new Paragraph(label).setFont(bold).setFontSize(hdrF))
+                        .setBackgroundColor(TABLE_HEADER_BG).setTextAlignment(TextAlignment.CENTER).setPadding(4));
+            }
             marksTable.addHeaderCell(new Cell(1, 2).add(new Paragraph("TERMLY AVERAGE").setFont(bold).setFontSize(hdrF))
                     .setBackgroundColor(TABLE_HEADER_BG).setTextAlignment(TextAlignment.CENTER).setPadding(4));
-            for (String sub : new String[]{"MARKS", "LEVEL", "MARKS", "LEVEL", "MARKS", "LEVEL"})
-                marksTable.addHeaderCell(new Cell().add(new Paragraph(sub).setFont(bold).setFontSize(hdrF - 1))
-                        .setBackgroundColor(TABLE_HEADER_BG).setTextAlignment(TextAlignment.CENTER).setPadding(3));
 
+            // Header row 2
+            for (int i = 0; i < examCount + 1; i++) {
+                marksTable.addHeaderCell(new Cell().add(new Paragraph("MARKS").setFont(bold).setFontSize(hdrF - 1))
+                        .setBackgroundColor(TABLE_HEADER_BG).setTextAlignment(TextAlignment.CENTER).setPadding(3));
+                marksTable.addHeaderCell(new Cell().add(new Paragraph("LEVEL").setFont(bold).setFontSize(hdrF - 1))
+                        .setBackgroundColor(TABLE_HEADER_BG).setTextAlignment(TextAlignment.CENTER).setPadding(3));
+            }
+
+            // ── Data rows ──
             boolean alt = false;
-            double totalMid = 0, totalEnd = 0, totalAvg = 0;
-            int midCount = 0, endCount = 0;
+            double[] examTotals = new double[examCount];
+            int[] examCounts = new int[examCount];
+            double totalAvg = 0; int avgDenominator = 0;
 
             for (Subject sub : subjects) {
                 DeviceRgb rowBg = alt ? ALT_ROW_COLOR : null;
                 String name = sub.getSubjectName();
-                BigDecimal midScore = midMarks.get(name);
-                BigDecimal endScore = endMarks.get(name);
 
-                String midStr   = midScore != null ? midScore.toPlainString() : "";
-                String midLevel = midScore != null ? getDetailedGrade(midScore.doubleValue()) : "";
-                String endStr   = endScore != null ? endScore.toPlainString() : "";
-                String endLevel = endScore != null ? getDetailedGrade(endScore.doubleValue()) : "";
+                addMarkCell(marksTable, name, regular, bodyF, rowBg, TextAlignment.LEFT, rowH);
 
-                double avg = 0;
-                if (midScore != null && endScore != null)      avg = (midScore.doubleValue() + endScore.doubleValue()) / 2.0;
-                else if (midScore != null)                     avg = midScore.doubleValue();
-                else if (endScore != null)                     avg = endScore.doubleValue();
+                double subjectAvgSum = 0; int subjectAvgCount = 0;
 
-                String avgStr   = (midScore != null || endScore != null) ? String.format("%.1f", avg) : "";
-                String avgLevel = (midScore != null || endScore != null) ? getDetailedGrade(avg) : "";
+                for (int i = 0; i < examCount; i++) {
+                    String label = examLabels.get(i);
+                    Map<String, BigDecimal> studentMarks = allMarksPerExam.get(label)
+                            .getOrDefault(student.getStudentId(), Collections.emptyMap());
+                    BigDecimal score = studentMarks.get(name);
 
-                addMarkCell(marksTable, name,     regular, bodyF,     rowBg, TextAlignment.LEFT,   rowH);
-                addMarkCell(marksTable, midStr,   regular, bodyF,     rowBg, TextAlignment.CENTER, rowH);
-                addMarkCell(marksTable, midLevel, bold,    bodyF - 1, rowBg, TextAlignment.CENTER, rowH);
-                addMarkCell(marksTable, endStr,   regular, bodyF,     rowBg, TextAlignment.CENTER, rowH);
-                addMarkCell(marksTable, endLevel, bold,    bodyF - 1, rowBg, TextAlignment.CENTER, rowH);
-                addMarkCell(marksTable, avgStr,   regular, bodyF,     rowBg, TextAlignment.CENTER, rowH);
-                addMarkCell(marksTable, avgLevel, bold,    bodyF - 1, rowBg, TextAlignment.CENTER, rowH);
+                    String scoreStr = score != null ? score.toPlainString() : "";
+                    String levelStr = score != null ? getDetailedGrade(score.doubleValue()) : "";
 
-                if (midScore != null) { totalMid += midScore.doubleValue(); midCount++; }
-                if (endScore != null) { totalEnd += endScore.doubleValue(); endCount++; }
-                if (midScore != null || endScore != null) totalAvg += avg;
+                    addMarkCell(marksTable, scoreStr, regular, bodyF,     rowBg, TextAlignment.CENTER, rowH);
+                    addMarkCell(marksTable, levelStr, bold,    bodyF - 1, rowBg, TextAlignment.CENTER, rowH);
+
+                    if (score != null) {
+                        examTotals[i] += score.doubleValue();
+                        examCounts[i]++;
+                        subjectAvgSum += score.doubleValue();
+                        subjectAvgCount++;
+                    }
+                }
+
+                if (subjectAvgCount > 0) {
+                    double subjAvg = subjectAvgSum / subjectAvgCount;
+                    addMarkCell(marksTable, String.format("%.1f", subjAvg), regular, bodyF, rowBg, TextAlignment.CENTER, rowH);
+                    addMarkCell(marksTable, getDetailedGrade(subjAvg), bold, bodyF - 1, rowBg, TextAlignment.CENTER, rowH);
+                    totalAvg += subjAvg;
+                    avgDenominator++;
+                } else {
+                    addMarkCell(marksTable, "", regular, bodyF, rowBg, TextAlignment.CENTER, rowH);
+                    addMarkCell(marksTable, "", bold, bodyF - 1, rowBg, TextAlignment.CENTER, rowH);
+                }
+
                 alt = !alt;
             }
 
-            int avgCount = Math.max(midCount, endCount);
-            double overallAvg = avgCount > 0 ? totalAvg / avgCount : 0;
+            // TOTAL row
+            double overallAvg = avgDenominator > 0 ? totalAvg / avgDenominator : 0;
 
             marksTable.addCell(new Cell().add(new Paragraph("TOTAL").setFont(bold).setFontSize(bodyF))
                     .setBackgroundColor(TOTAL_ROW_BG).setPadding(4).setMinHeight(rowH));
-            addMarkCell(marksTable, midCount > 0 ? String.format("%.0f", totalMid) : "",   bold, bodyF,     TOTAL_ROW_BG, TextAlignment.CENTER, rowH);
-            addMarkCell(marksTable, "",            bold, bodyF - 1, TOTAL_ROW_BG, TextAlignment.CENTER, rowH);
-            addMarkCell(marksTable, endCount > 0 ? String.format("%.0f", totalEnd) : "",   bold, bodyF,     TOTAL_ROW_BG, TextAlignment.CENTER, rowH);
-            addMarkCell(marksTable, "",            bold, bodyF - 1, TOTAL_ROW_BG, TextAlignment.CENTER, rowH);
-            addMarkCell(marksTable, avgCount > 0 ? String.format("%.1f", overallAvg) : "", bold, bodyF,     TOTAL_ROW_BG, TextAlignment.CENTER, rowH);
-            addMarkCell(marksTable, avgCount > 0 ? getDetailedGrade(overallAvg) : "",      bold, bodyF - 1, TOTAL_ROW_BG, TextAlignment.CENTER, rowH);
+
+            for (int i = 0; i < examCount; i++) {
+                addMarkCell(marksTable, examCounts[i] > 0 ? String.format("%.0f", examTotals[i]) : "",
+                        bold, bodyF, TOTAL_ROW_BG, TextAlignment.CENTER, rowH);
+                addMarkCell(marksTable, "", bold, bodyF - 1, TOTAL_ROW_BG, TextAlignment.CENTER, rowH);
+            }
+
+            addMarkCell(marksTable, avgDenominator > 0 ? String.format("%.1f", overallAvg) : "",
+                    bold, bodyF, TOTAL_ROW_BG, TextAlignment.CENTER, rowH);
+            addMarkCell(marksTable, avgDenominator > 0 ? getDetailedGrade(overallAvg) : "",
+                    bold, bodyF - 1, TOTAL_ROW_BG, TextAlignment.CENTER, rowH);
 
             doc.add(marksTable);
 
             // ── Rubric ──
             doc.add(new Paragraph(" ").setMarginTop(6).setFontSize(2));
-            Table rubric = new Table(UnitValue.createPercentArray(new float[]{14, 11, 11, 11, 11, 11, 11, 11, 9})).setWidth(UnitValue.createPercentValue(100));
+            Table rubric = new Table(UnitValue.createPercentArray(new float[]{14, 11, 11, 11, 11, 11, 11, 11, 9}))
+                    .setWidth(UnitValue.createPercentValue(100));
             for (String label : new String[]{"RUBRIC","EE 1","EE 2","ME 1","ME 2","AE 1","AE 2","BE 1","BE 2"})
-                rubric.addCell(new Cell().add(new Paragraph(label).setFont(bold).setFontSize(8)).setBackgroundColor(TABLE_HEADER_BG).setTextAlignment(TextAlignment.CENTER).setPadding(3));
+                rubric.addCell(new Cell().add(new Paragraph(label).setFont(bold).setFontSize(8))
+                        .setBackgroundColor(TABLE_HEADER_BG).setTextAlignment(TextAlignment.CENTER).setPadding(3));
             for (String mark : new String[]{"MARK","90-100","75-89","58-74","41-57","31-40","21-30","11-20","1-10"})
-                rubric.addCell(new Cell().add(new Paragraph(mark).setFont(regular).setFontSize(8)).setTextAlignment(TextAlignment.CENTER).setPadding(3));
+                rubric.addCell(new Cell().add(new Paragraph(mark).setFont(regular).setFontSize(8))
+                        .setTextAlignment(TextAlignment.CENTER).setPadding(3));
             doc.add(rubric);
 
-            // ── Comment ──
             doc.add(new Paragraph("FACILITATOR'S COMMENT:  " + generateFacilitatorComment(student.getFirstName(),
-                    avgCount > 0 ? getDetailedGrade(overallAvg) : "ME1", gl))
+                    avgDenominator > 0 ? getDetailedGrade(overallAvg) : "ME1", gl))
                     .setFont(regular).setFontSize(8).setMarginTop(8));
 
             // ── Signatures ──
-            Table sigTable = new Table(UnitValue.createPercentArray(new float[]{40, 35, 25})).setWidth(UnitValue.createPercentValue(100)).setMarginTop(14);
+            Table sigTable = new Table(UnitValue.createPercentArray(new float[]{40, 35, 25}))
+                    .setWidth(UnitValue.createPercentValue(100)).setMarginTop(14);
             sigTable.addCell(new Cell().add(new Paragraph("HEAD TEACHER'S SIGNATURE:").setFont(bold).setFontSize(7))
-                    .add(new Paragraph(" ").setFontSize(4)).add(new Paragraph("________________________________").setFont(regular).setFontSize(8)).setBorder(Border.NO_BORDER));
+                    .add(new Paragraph(" ").setFontSize(4))
+                    .add(new Paragraph("________________________________").setFont(regular).setFontSize(8)).setBorder(Border.NO_BORDER));
             sigTable.addCell(new Cell().add(new Paragraph("CLASS TEACHER'S SIGNATURE:").setFont(bold).setFontSize(7))
-                    .add(new Paragraph(" ").setFontSize(4)).add(new Paragraph("______________________").setFont(regular).setFontSize(8)).setBorder(Border.NO_BORDER));
+                    .add(new Paragraph(" ").setFontSize(4))
+                    .add(new Paragraph("______________________").setFont(regular).setFontSize(8)).setBorder(Border.NO_BORDER));
             sigTable.addCell(new Cell().add(new Paragraph("DATE:").setFont(bold).setFontSize(7))
-                    .add(new Paragraph(" ").setFontSize(4)).add(new Paragraph("_________________").setFont(regular).setFontSize(8)).setBorder(Border.NO_BORDER));
+                    .add(new Paragraph(" ").setFontSize(4))
+                    .add(new Paragraph("_________________").setFont(regular).setFontSize(8)).setBorder(Border.NO_BORDER));
             doc.add(sigTable);
 
-            // ── Dates ──
-            Table datesTable = new Table(UnitValue.createPercentArray(new float[]{50, 50})).setWidth(UnitValue.createPercentValue(100)).setMarginTop(6);
-            datesTable.addCell(new Cell().add(new Paragraph("CLOSING DATE:  ________________________").setFont(regular).setFontSize(8)).setBorder(Border.NO_BORDER));
-            datesTable.addCell(new Cell().add(new Paragraph("OPENING DATE:  ________________________").setFont(regular).setFontSize(8).setTextAlignment(TextAlignment.RIGHT)).setBorder(Border.NO_BORDER));
+            Table datesTable = new Table(UnitValue.createPercentArray(new float[]{50, 50}))
+                    .setWidth(UnitValue.createPercentValue(100)).setMarginTop(6);
+            datesTable.addCell(new Cell().add(new Paragraph("CLOSING DATE:  ________________________")
+                    .setFont(regular).setFontSize(8)).setBorder(Border.NO_BORDER));
+            datesTable.addCell(new Cell().add(new Paragraph("OPENING DATE:  ________________________")
+                    .setFont(regular).setFontSize(8).setTextAlignment(TextAlignment.RIGHT)).setBorder(Border.NO_BORDER));
             doc.add(datesTable);
 
             count++;
@@ -617,9 +794,9 @@ public class ReportService {
         return baos.toByteArray();
     }
 
-    // ──────────────────────────────────────────────────────────────
-    // SCHOOL-WIDE REPORT PDF
-    // ──────────────────────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════
+    // SCHOOL-WIDE REPORT PDF (unchanged)
+    // ══════════════════════════════════════════════════════════════
     public byte[] generateSchoolReportPdf(String academicYear, Integer term, String examName) throws Exception {
         List<ClassRoom> classes = classRoomRepository.findByAcademicYear(academicYear);
 
@@ -654,7 +831,8 @@ public class ReportService {
 
             doc.add(new Paragraph(classRoom.getDisplayName()).setFont(bold).setFontSize(13).setFontColor(HEADER_COLOR).setMarginTop(10));
 
-            Table table = new Table(UnitValue.createPercentArray(new float[]{1, 2, 3, 2, 1, 1, 1})).setWidth(UnitValue.createPercentValue(100));
+            Table table = new Table(UnitValue.createPercentArray(new float[]{1, 2, 3, 2, 1, 1, 1}))
+                    .setWidth(UnitValue.createPercentValue(100));
             for (String h : new String[]{"#", "Adm No.", "Name", "Subjects Sat", "Total", "Average", "Grade"})
                 addHeaderCell(table, h, bold);
 
@@ -683,9 +861,9 @@ public class ReportService {
         return baos.toByteArray();
     }
 
-    // ──────────────────────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════
     // SHARED BUILDERS
-    // ──────────────────────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════
 
     private void buildReportHeader(Document doc, PdfFont bold, PdfFont regular, PdfFont italic) throws Exception {
         Table headerTable = new Table(UnitValue.createPercentArray(new float[]{18, 82})).setWidth(UnitValue.createPercentValue(100));
@@ -715,6 +893,7 @@ public class ReportService {
         doc.add(nameGrade);
     }
 
+    /** Legacy 2-exam header — used only by generateStudentMarksheetPdf */
     private Table buildTableHeader(float bodyF, float hdrF) throws Exception {
         float[] colWidths = {30, 10, 10, 10, 10, 15, 15};
         Table t = new Table(UnitValue.createPercentArray(colWidths)).setWidth(UnitValue.createPercentValue(100)).setMarginTop(8);
@@ -736,7 +915,6 @@ public class ReportService {
         return t;
     }
 
-    // ── CHANGED: reduced margins to help single-student fit on one page ──
     private void buildRubric(Document doc, PdfFont bold, PdfFont regular) {
         doc.add(new Paragraph(" ").setMarginTop(6));
         Table rubric = new Table(UnitValue.createPercentArray(new float[]{14, 11, 11, 11, 11, 11, 11, 11, 9})).setWidth(UnitValue.createPercentValue(100));
@@ -747,7 +925,6 @@ public class ReportService {
         doc.add(rubric);
     }
 
-    // ── CHANGED: setMarginTop(20) → setMarginTop(14) ──
     private void buildSignatures(Document doc, PdfFont bold, PdfFont regular) {
         Table sigTable = new Table(UnitValue.createPercentArray(new float[]{40, 35, 25})).setWidth(UnitValue.createPercentValue(100)).setMarginTop(14);
         sigTable.addCell(new Cell().add(new Paragraph("HEAD TEACHER'S SIGNATURE:").setFont(bold).setFontSize(8))
@@ -759,7 +936,6 @@ public class ReportService {
         doc.add(sigTable);
     }
 
-    // ── CHANGED: setMarginTop(10) → setMarginTop(6) ──
     private void buildDates(Document doc, PdfFont regular) {
         Table datesTable = new Table(UnitValue.createPercentArray(new float[]{50, 50})).setWidth(UnitValue.createPercentValue(100)).setMarginTop(6);
         datesTable.addCell(new Cell().add(new Paragraph("CLOSING DATE:  ________________________").setFont(regular).setFontSize(9)).setBorder(Border.NO_BORDER));
