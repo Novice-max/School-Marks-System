@@ -119,27 +119,33 @@ public class AdminController {
     public ResponseEntity<List<Student>> getAllStudents() { return ResponseEntity.ok(studentRepository.findAll()); }
 
     @PostMapping("/students")
-    public ResponseEntity<Student> createStudent(@RequestBody Map<String, Object> body) {
-        ClassRoom classRoom = classRoomRepository.findById(
-            Long.valueOf(((Map<?,?>)body.get("classRoom")).get("classId").toString())
-        ).orElseThrow(() -> new RuntimeException("Class not found"));
-
-        Student student = Student.builder()
-                .firstName((String) body.get("firstName"))
-                .lastName((String) body.get("lastName"))
-                .admissionNumber((String) body.get("admissionNumber"))
-                .gender((String) body.get("gender"))
-                .parentContact((String) body.get("parentContact"))
-                .classRoom(classRoom)
-                .isActive(true)
-                .build();
-
-        if (body.get("dateOfBirth") != null && !body.get("dateOfBirth").toString().isEmpty()) {
-            student.setDateOfBirth(java.time.LocalDate.parse(body.get("dateOfBirth").toString()));
-        }
-
-        return ResponseEntity.ok(studentRepository.save(student));
+    public ResponseEntity<?> createStudent(@RequestBody Map<String, Object> body) {
+    String admNo = (String) body.get("admissionNumber");
+    if (studentRepository.existsByAdmissionNumber(admNo)) {
+        return ResponseEntity.badRequest().body(Map.of("message",
+            "Admission number " + admNo + " already exists"));
     }
+
+    ClassRoom classRoom = classRoomRepository.findById(
+        Long.valueOf(((Map<?,?>)body.get("classRoom")).get("classId").toString())
+    ).orElseThrow(() -> new RuntimeException("Class not found"));
+
+    Student student = Student.builder()
+            .firstName((String) body.get("firstName"))
+            .lastName((String) body.get("lastName"))
+            .admissionNumber(admNo)
+            .gender((String) body.get("gender"))
+            .parentContact((String) body.get("parentContact"))
+            .classRoom(classRoom)
+            .isActive(true)
+            .build();
+
+    if (body.get("dateOfBirth") != null && !body.get("dateOfBirth").toString().isEmpty()) {
+        student.setDateOfBirth(java.time.LocalDate.parse(body.get("dateOfBirth").toString()));
+    }
+
+    return ResponseEntity.ok(studentRepository.save(student));
+}
 
     @GetMapping("/students/class/{classId}")
     public ResponseEntity<List<Student>> getStudentsByClass(@PathVariable Long classId) {
