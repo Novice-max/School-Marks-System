@@ -18,6 +18,7 @@ import ReportsPage          from './pages/ReportsPage';
 import MarkEntryPage        from './pages/teacher/MarkEntryPage';
 import TeacherAnalyticsPage from './pages/teacher/TeacherAnalyticsPage';
 import SubjectsPage         from './pages/admin/SubjectsPage';
+import SettingsPage         from './pages/SettingsPage';
 
 function PrivateRoute({ children, role }) {
   const { user } = useAuth();
@@ -56,6 +57,8 @@ function AppRoutes() {
       <Route path="/teacher/marks"     element={<PrivateRoute><MarkEntryPage /></PrivateRoute>} />
       <Route path="/teacher/analytics" element={<PrivateRoute><TeacherAnalyticsPage /></PrivateRoute>} />
       <Route path="/teacher/reports"   element={<PrivateRoute><ReportsPage /></PrivateRoute>} />
+
+      <Route path="/settings" element={<PrivateRoute><SettingsPage /></PrivateRoute>} />
 
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>

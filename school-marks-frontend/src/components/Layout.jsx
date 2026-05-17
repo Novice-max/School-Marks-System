@@ -556,7 +556,7 @@ export default function Layout({ children }) {
           {/* Settings placeholder */}
           <button
             style={S.footerBtn}
-            onClick={() => { /* TODO: navigate to settings */ }}
+            onClick={() => navigate('/settings')}
             title="Settings"
             onMouseEnter={e => e.currentTarget.style.background = tokens.sidebarActive}
             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
