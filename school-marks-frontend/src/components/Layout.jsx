@@ -196,13 +196,15 @@ export default function Layout({ children }) {
       display: 'flex',
       flexDirection: 'column',
       position: 'fixed',
-      top: isMobile ? 52 : 0,
-      left: 0,
-      height: isMobile ? 'calc(100vh - 52px)' : '100vh',
+      top: isMobile ? 52 : 8,
+      left: isMobile ? 0 : 8,
+      height: isMobile ? 'calc(100vh - 52px)' : 'calc(100vh - 16px)',
       overflowY: 'auto',
       overflowX: 'hidden',
       zIndex: 150,
-      borderRight: `1px solid ${tokens.sidebarBorder}`,
+      borderRadius: isMobile ? 0 : 16,
+      border: isMobile ? 'none' : `1px solid ${tokens.sidebarBorder}`,
+      boxShadow: isMobile ? 'none' : `0 2px 12px ${tokens.shadow}`,
       transition: 'width 0.25s cubic-bezier(.4,0,.2,1), transform 0.25s cubic-bezier(.4,0,.2,1), background 0.3s ease',
       transform: isMobile ? (mobileOpen ? 'translateX(0)' : 'translateX(-100%)') : 'translateX(0)',
     },
@@ -368,26 +370,26 @@ export default function Layout({ children }) {
     collapseBtn: {
       display: isMobile ? 'none' : 'flex',
       position: 'absolute',
-      top: 24,
-      right: -12,
-      width: 24,
-      height: 24,
+      top: 28,
+      right: -14,
+      width: 28,
+      height: 28,
       borderRadius: '50%',
-      background: tokens.surface,
-      border: `1px solid ${tokens.border}`,
+      background: tokens.accent,
+      border: `2px solid ${tokens.surface}`,
       alignItems: 'center',
       justifyContent: 'center',
       cursor: 'pointer',
-      boxShadow: `0 2px 6px ${tokens.shadow}`,
+      boxShadow: `0 2px 8px ${tokens.shadowHeavy}`,
       zIndex: 160,
-      transition: 'background 0.15s ease',
+      transition: 'background 0.15s ease, transform 0.15s ease',
     },
 
     /* ─ MAIN CONTENT ─ */
     main: {
-      marginLeft: isMobile ? 0 : sidebarW,
+      marginLeft: isMobile ? 0 : (sidebarW + 24),
       flex: 1,
-      padding: isMobile ? '68px 16px 24px' : 32,
+      padding: isMobile ? '68px 16px 24px' : '16px 16px 16px 0',
       transition: 'margin-left 0.25s cubic-bezier(.4,0,.2,1)',
       minHeight: '100vh',
     },
@@ -395,8 +397,9 @@ export default function Layout({ children }) {
       background: tokens.surface,
       borderRadius: 16,
       padding: isMobile ? 16 : 28,
-      minHeight: 'calc(100vh - 96px)',
+      minHeight: 'calc(100vh - 48px)',
       boxShadow: `0 1px 3px ${tokens.shadow}`,
+      border: `1px solid ${tokens.border}`,
       transition: 'background 0.3s ease',
     },
 
@@ -500,8 +503,8 @@ export default function Layout({ children }) {
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           {collapsed
-            ? <ChevronRight size={14} color={tokens.textMuted} />
-            : <ChevronLeft size={14} color={tokens.textMuted} />
+            ? <ChevronRight size={14} color="#fff" />
+            : <ChevronLeft size={14} color="#fff" />
           }
         </button>
 
