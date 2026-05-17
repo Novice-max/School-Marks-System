@@ -156,7 +156,7 @@ public class ReportService {
 
             double avg = counted > 0 ? BigDecimal.valueOf(totalPoints / counted)
                     .setScale(2, RoundingMode.HALF_UP).doubleValue() : 0;
-            String overallGrade = getSimpleCbcGrade(avg, exam.getClassRoom().getGradeLevel());
+            String overallGrade = getGrade(avg);
             addCell(table, String.format("%.1f", totalPoints), regular, rc, cf);
             addCell(table, String.format("%.2f", avg), regular, rc, cf);
             Cell gc = new Cell().add(new Paragraph(overallGrade).setFont(bold).setFontSize(cf))
@@ -218,7 +218,7 @@ public class ReportService {
             DeviceRgb rb = alt ? ALT_ROW_COLOR : null;
             String ss = sm.getScore() != null ? sm.getScore().toPlainString() : "";
             double sv = sm.getScore() != null ? sm.getScore().doubleValue() : 0;
-            String lv = sm.getScore() != null ? getDetailedGrade(sv) : "";
+            String lv = sm.getScore() != null ? getGrade(sv) : "";
 
             addMarkCell(mt, sm.getSubjectName(), regular, bf, rb, TextAlignment.LEFT, rh);
             if (isMid) {
@@ -250,7 +250,7 @@ public class ReportService {
         double av = sc > 0 ? ts / sc : 0;
         String tstr = sc > 0 ? String.format("%.0f", ts) : "";
         String astr = sc > 0 ? String.format("%.1f", av) : "";
-        String alvl = sc > 0 ? getDetailedGrade(av) : "";
+        String alvl = sc > 0 ? getGrade(av) : "";
 
         mt.addCell(new Cell().add(new Paragraph("TOTAL").setFont(bold).setFontSize(bf)).setBackgroundColor(TOTAL_ROW_BG).setPadding(6).setMinHeight(rh));
         if (isMid) {
@@ -333,10 +333,10 @@ public class ReportService {
             for (int i = 0; i < slots.size(); i++) {
                 BigDecimal score = slots.get(i).marks.get(sub.getSubjectName());
                 addMarkCell(mt, score!=null?score.toPlainString():"", regular, bf, rb, TextAlignment.CENTER, rh);
-                addMarkCell(mt, score!=null?getDetailedGrade(score.doubleValue()):"", bold, bf-1, rb, TextAlignment.CENTER, rh);
+                addMarkCell(mt, score!=null?getGrade(score.doubleValue()):"", bold, bf-1, rb, TextAlignment.CENTER, rh);
                 if (score!=null) { sTotals[i]+=score.doubleValue(); sCounts[i]++; sA+=score.doubleValue(); sN++; }
             }
-            if (sN>0) { double a=sA/sN; addMarkCell(mt,String.format("%.1f",a),regular,bf,rb,TextAlignment.CENTER,rh); addMarkCell(mt,getDetailedGrade(a),bold,bf-1,rb,TextAlignment.CENTER,rh); tAvg+=a; aC++; }
+            if (sN>0) { double a=sA/sN; addMarkCell(mt,String.format("%.1f",a),regular,bf,rb,TextAlignment.CENTER,rh); addMarkCell(mt,getGrade(a),bold,bf-1,rb,TextAlignment.CENTER,rh); tAvg+=a; aC++; }
             else { addMarkCell(mt,"",regular,bf,rb,TextAlignment.CENTER,rh); addMarkCell(mt,"",bold,bf-1,rb,TextAlignment.CENTER,rh); }
             alt = !alt;
         }
@@ -345,11 +345,11 @@ public class ReportService {
         for (int i=0;i<slots.size();i++) { addMarkCell(mt,sCounts[i]>0?String.format("%.0f",sTotals[i]):"",bold,bf,TOTAL_ROW_BG,TextAlignment.CENTER,rh); addMarkCell(mt,"",bold,bf-1,TOTAL_ROW_BG,TextAlignment.CENTER,rh); }
         double oAvg = aC>0?tAvg/aC:0;
         addMarkCell(mt,aC>0?String.format("%.1f",oAvg):"",bold,bf,TOTAL_ROW_BG,TextAlignment.CENTER,rh);
-        addMarkCell(mt,aC>0?getDetailedGrade(oAvg):"",bold,bf-1,TOTAL_ROW_BG,TextAlignment.CENTER,rh);
+        addMarkCell(mt,aC>0?getGrade(oAvg):"",bold,bf-1,TOTAL_ROW_BG,TextAlignment.CENTER,rh);
 
         doc.add(mt);
         buildRubric(doc, bold, regular);
-        doc.add(new Paragraph("FACILITATOR'S COMMENT:  "+generateFacilitatorComment(student.getFirstName(),aC>0?getDetailedGrade(oAvg):"ME1",gl)).setFont(regular).setFontSize(9).setMarginTop(8));
+        doc.add(new Paragraph("FACILITATOR'S COMMENT:  "+generateFacilitatorComment(student.getFirstName(),aC>0?getGrade(oAvg):"ME1",gl)).setFont(regular).setFontSize(9).setMarginTop(8));
         buildSignatures(doc, bold, regular);
         buildDates(doc, regular);
         doc.close();
@@ -440,10 +440,10 @@ public class ReportService {
                 for (int i=0;i<bSlots.size();i++) {
                     BigDecimal score = sMaps.get(i).get(sub.getSubjectName());
                     addMarkCell(mt, score!=null?score.toPlainString():"", regular, bf, rb, TextAlignment.CENTER, rh);
-                    addMarkCell(mt, score!=null?getDetailedGrade(score.doubleValue()):"", bold, bf-1, rb, TextAlignment.CENTER, rh);
+                    addMarkCell(mt, score!=null?getGrade(score.doubleValue()):"", bold, bf-1, rb, TextAlignment.CENTER, rh);
                     if (score!=null) { sTotals[i]+=score.doubleValue(); sCounts[i]++; sA+=score.doubleValue(); sN++; }
                 }
-                if (sN>0) { double a=sA/sN; addMarkCell(mt,String.format("%.1f",a),regular,bf,rb,TextAlignment.CENTER,rh); addMarkCell(mt,getDetailedGrade(a),bold,bf-1,rb,TextAlignment.CENTER,rh); tAvg+=a; aC++; }
+                if (sN>0) { double a=sA/sN; addMarkCell(mt,String.format("%.1f",a),regular,bf,rb,TextAlignment.CENTER,rh); addMarkCell(mt,getGrade(a),bold,bf-1,rb,TextAlignment.CENTER,rh); tAvg+=a; aC++; }
                 else { addMarkCell(mt,"",regular,bf,rb,TextAlignment.CENTER,rh); addMarkCell(mt,"",bold,bf-1,rb,TextAlignment.CENTER,rh); }
                 alt = !alt;
             }
@@ -452,7 +452,7 @@ public class ReportService {
             for (int i=0;i<bSlots.size();i++) { addMarkCell(mt,sCounts[i]>0?String.format("%.0f",sTotals[i]):"",bold,bf,TOTAL_ROW_BG,TextAlignment.CENTER,rh); addMarkCell(mt,"",bold,bf-1,TOTAL_ROW_BG,TextAlignment.CENTER,rh); }
             double oAvg=aC>0?tAvg/aC:0;
             addMarkCell(mt,aC>0?String.format("%.1f",oAvg):"",bold,bf,TOTAL_ROW_BG,TextAlignment.CENTER,rh);
-            addMarkCell(mt,aC>0?getDetailedGrade(oAvg):"",bold,bf-1,TOTAL_ROW_BG,TextAlignment.CENTER,rh);
+            addMarkCell(mt,aC>0?getGrade(oAvg):"",bold,bf-1,TOTAL_ROW_BG,TextAlignment.CENTER,rh);
             doc.add(mt);
 
             // Rubric
@@ -464,7 +464,7 @@ public class ReportService {
                 rub.addCell(new Cell().add(new Paragraph(m).setFont(regular).setFontSize(8)).setTextAlignment(TextAlignment.CENTER).setPadding(3));
             doc.add(rub);
 
-            doc.add(new Paragraph("FACILITATOR'S COMMENT:  "+generateFacilitatorComment(student.getFirstName(),aC>0?getDetailedGrade(oAvg):"ME1",gl)).setFont(regular).setFontSize(8).setMarginTop(8));
+            doc.add(new Paragraph("FACILITATOR'S COMMENT:  "+generateFacilitatorComment(student.getFirstName(),aC>0?getGrade(oAvg):"ME1",gl)).setFont(regular).setFontSize(8).setMarginTop(8));
 
             Table sig = new Table(UnitValue.createPercentArray(new float[]{40,35,25})).setWidth(UnitValue.createPercentValue(100)).setMarginTop(14);
             sig.addCell(new Cell().add(new Paragraph("HEAD TEACHER'S SIGNATURE:").setFont(bold).setFontSize(7)).add(new Paragraph(" ").setFontSize(4)).add(new Paragraph("________________________________").setFont(regular).setFontSize(8)).setBorder(Border.NO_BORDER));
@@ -516,7 +516,7 @@ public class ReportService {
                 addCell(t,String.valueOf(s.getPosition()),regular,rc); addCell(t,s.getAdmissionNumber(),regular,rc);
                 addCell(t,s.getFullName(),regular,rc); addCell(t,String.valueOf(s.getSubjectMarks().size()),regular,rc);
                 addCell(t,String.format("%.1f",s.getTotalScore()),regular,rc); addCell(t,String.format("%.2f",s.getAverage()),regular,rc);
-                String g = getSimpleCbcGrade(s.getAverage(),cr.getGradeLevel());
+                String g = getGrade(s.getAverage());
                 Cell gc = new Cell().add(new Paragraph(g).setFont(bold).setFontSize(9).setFontColor(getGradeColor(g))).setTextAlignment(TextAlignment.CENTER).setVerticalAlignment(VerticalAlignment.MIDDLE);
                 if (rc!=null) gc.setBackgroundColor(rc); t.addCell(gc); alt=!alt;
             }
@@ -686,8 +686,9 @@ public class ReportService {
     private float headerFont(int n) { return n<=7?10f:9f; }
 
     // ── Grade helpers ──
-    private String getDetailedGrade(double s) { if(s>=90)return"EE1";if(s>=75)return"EE2";if(s>=58)return"ME1";if(s>=41)return"ME2";if(s>=31)return"AE1";if(s>=21)return"AE2";if(s>=11)return"BE1";return"BE2"; }
-    private String getSimpleCbcGrade(double a, int gl) { if(gl<=3)return a>=75?"EE":a>=50?"ME":a>=25?"AE":"BE"; return a>=75?"EE":a>=41?"ME":a>=21?"AE":"BE"; }
+    private String getGrade(double score) {
+        return markService.calculateCbcGrade(java.math.BigDecimal.valueOf(score));
+    }
     private DeviceRgb getGradeColor(String g) { if(g==null)return new DeviceRgb(0,0,0); if(g.startsWith("EE"))return EE_COLOR;if(g.startsWith("ME"))return ME_COLOR;if(g.startsWith("AE"))return AE_COLOR;if(g.startsWith("BE"))return BE_COLOR;return new DeviceRgb(0,0,0); }
     private String getLevelLabel(int gl) { if(gl==-1)return"PRE-PRIMARY ONE (PP1)";if(gl==0)return"PRE-PRIMARY TWO (PP2)";return""; }
 
