@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { getClasses, downloadMarklist, downloadTermReport } from '../api/client';
 import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { usePageStyles } from '../styles/pageStyles';
 import toast from 'react-hot-toast';
 
 function savePdf(blob, filename) {
@@ -19,24 +20,23 @@ const classLabel = c =>
 
 export default function ReportsPage() {
   const { user } = useAuth();
-  const isAdmin  = user?.role === 'ADMIN';
+  const s = usePageStyles();
+  const t = s.tokens;
+  const isAdmin = user?.role === 'ADMIN';
 
   const [classes,     setClasses]     = useState([]);
   const [exams,       setExams]       = useState([]);
   const [students,    setStudents]    = useState([]);
   const [loading,     setLoading]     = useState('');
 
-  // Class marklist state
   const [listClass,   setListClass]   = useState('');
   const [listExam,    setListExam]    = useState('');
 
-  // Student report card state
   const [cardClass,   setCardClass]   = useState('');
   const [cardStudent, setCardStudent] = useState('');
   const [cardTerm,    setCardTerm]    = useState('1');
   const [cardYear,    setCardYear]    = useState(new Date().getFullYear().toString());
 
-  // School-wide report state
   const [schoolYear,  setSchoolYear]  = useState(new Date().getFullYear().toString());
   const [schoolTerm,  setSchoolTerm]  = useState('1');
   const [schoolExam,  setSchoolExam]  = useState('Opener');
@@ -59,7 +59,6 @@ export default function ReportsPage() {
     }
   }, [isAdmin]);
 
-  // Load exams when marklist class changes
   useEffect(() => {
     if (!listClass) { setExams([]); return; }
     const endpoint = isAdmin ? `/admin/exams` : `/teacher/exams/class/${listClass}`;
@@ -69,7 +68,6 @@ export default function ReportsPage() {
     });
   }, [listClass, isAdmin]);
 
-  // Load students when report card class changes
   useEffect(() => {
     if (!cardClass) { setStudents([]); return; }
     const endpoint = isAdmin ? `/admin/students/class/${cardClass}` : `/teacher/students/class/${cardClass}`;
@@ -127,112 +125,121 @@ export default function ReportsPage() {
     finally { setLoading(''); }
   };
 
+  /* ─── Report card styles ─── */
+  const rc = {
+    grid:     { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px,1fr))', gap: 24 },
+    card:     { ...s.card, padding: 28, display: 'flex', flexDirection: 'column', gap: 10, borderRadius: 14 },
+    cardIcon: { fontSize: 36 },
+    cardDesc: { fontSize: 13, color: t.textFaint, marginBottom: 8 },
+    label:    { fontSize: 12, fontWeight: 600, color: t.textMuted },
+    select:   { ...s.input, fontSize: 13 },
+    btn:      { ...s.btn, marginTop: 8, width: '100%', textAlign: 'center', justifyContent: 'center' },
+    btnGreen: { ...s.btn, marginTop: 8, background: t.successText, width: '100%', textAlign: 'center' },
+  };
+
   return (
     <div>
-      <h1 style={s.pageTitle}>📄 Reports</h1>
+      <h1 style={s.title}>📄 Reports</h1>
 
-      <div style={s.grid}>
+      <div style={rc.grid}>
         {/* Class Marklist */}
-        <div style={s.card}>
-          <div style={s.cardIcon}>📋</div>
+        <div style={rc.card}>
+          <div style={rc.cardIcon}>📋</div>
           <h3 style={s.cardTitle}>Class Marklist</h3>
-          <p style={s.cardDesc}>Full marklist with positions, averages and grades</p>
+          <p style={rc.cardDesc}>Full marklist with positions, averages and grades</p>
 
-          <label style={s.label}>Class</label>
-          <select style={s.select} value={listClass} onChange={e => { setListClass(e.target.value); setListExam(''); }}>
+          <label style={rc.label}>Class</label>
+          <select style={rc.select} value={listClass} onChange={e => { setListClass(e.target.value); setListExam(''); }}>
             <option value="">Select class</option>
             {classes.map(c => (
               <option key={c.classId} value={c.classId}>{classLabel(c)} {c.academicYear ? `(${c.academicYear})` : ''}</option>
             ))}
           </select>
 
-          <label style={s.label}>Exam</label>
-          <select style={s.select} value={listExam} onChange={e => setListExam(e.target.value)}>
+          <label style={rc.label}>Exam</label>
+          <select style={rc.select} value={listExam} onChange={e => setListExam(e.target.value)}>
             <option value="">Select exam</option>
             {exams.map(e => <option key={e.examId} value={e.examId}>{e.examName} T{e.term} {e.academicYear}</option>)}
           </select>
 
-          <button style={s.btn} onClick={dlMarklist} disabled={loading === 'list'}>
+          <button style={rc.btn} onClick={dlMarklist} disabled={loading === 'list'}>
             {loading === 'list' ? 'Generating...' : '⬇️ Download PDF'}
           </button>
         </div>
 
         {/* Student Report Card */}
-        <div style={s.card}>
-          <div style={s.cardIcon}>👤</div>
+        <div style={rc.card}>
+          <div style={rc.cardIcon}>👤</div>
           <h3 style={s.cardTitle}>Student Report Card</h3>
-          <p style={s.cardDesc}>Full term report combining Mid-Term and End-Term marks</p>
+          <p style={rc.cardDesc}>Full term report combining Mid-Term and End-Term marks</p>
 
-          <label style={s.label}>Class</label>
-          <select style={s.select} value={cardClass} onChange={e => { setCardClass(e.target.value); setCardStudent(''); }}>
+          <label style={rc.label}>Class</label>
+          <select style={rc.select} value={cardClass} onChange={e => { setCardClass(e.target.value); setCardStudent(''); }}>
             <option value="">Select class</option>
             {classes.map(c => (
               <option key={c.classId} value={c.classId}>{classLabel(c)} {c.academicYear ? `(${c.academicYear})` : ''}</option>
             ))}
           </select>
 
-          <label style={s.label}>Student</label>
-          <select style={s.select} value={cardStudent} onChange={e => setCardStudent(e.target.value)}>
+          <label style={rc.label}>Student</label>
+          <select style={rc.select} value={cardStudent} onChange={e => setCardStudent(e.target.value)}>
             <option value="">Select student</option>
             {students.map(st => (
               <option key={st.studentId} value={st.studentId}>{st.firstName} {st.lastName} ({st.admissionNumber})</option>
             ))}
           </select>
 
-          <label style={s.label}>Term</label>
-          <select style={s.select} value={cardTerm} onChange={e => setCardTerm(e.target.value)}>
+          <label style={rc.label}>Term</label>
+          <select style={rc.select} value={cardTerm} onChange={e => setCardTerm(e.target.value)}>
             <option value="1">Term 1</option>
             <option value="2">Term 2</option>
             <option value="3">Term 3</option>
           </select>
 
-          <label style={s.label}>Academic Year</label>
-          <input style={s.select} type="text" value={cardYear}
+          <label style={rc.label}>Academic Year</label>
+          <input style={rc.select} type="text" value={cardYear}
             onChange={e => setCardYear(e.target.value)} placeholder="e.g. 2026" />
 
           <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
-            <button style={{ ...s.btn, flex: 1 }} onClick={dlTermReport} disabled={loading === 'sheet'}>
+            <button style={{ ...rc.btn, flex: 1 }} onClick={dlTermReport} disabled={loading === 'sheet'}>
               {loading === 'sheet' ? 'Generating...' : '⬇️ Single Student'}
             </button>
-            <button
-              style={{ ...s.btn, flex: 1, background: '#16a34a' }}
-              onClick={dlAllReportCards}
-              disabled={loading === 'allCards' || !cardClass}
-            >
+            <button style={{ ...rc.btnGreen, flex: 1 }} onClick={dlAllReportCards}
+              disabled={loading === 'allCards' || !cardClass}>
               {loading === 'allCards' ? 'Generating...' : '📦 Entire Class'}
             </button>
           </div>
-          <p style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
+          <p style={{ fontSize: 11, color: t.textFaint, marginTop: 2 }}>
             "Entire Class" downloads one PDF with every student's report card — ready to print.
           </p>
         </div>
 
         {/* School-wide report — admin only */}
         {isAdmin && (
-          <div style={{ ...s.card, borderTop: '4px solid #7c3aed' }}>
-            <div style={s.cardIcon}>🏫</div>
+          <div style={{ ...rc.card, borderTop: `4px solid ${t.accent}` }}>
+            <div style={rc.cardIcon}>🏫</div>
             <h3 style={s.cardTitle}>School-Wide Report</h3>
-            <p style={s.cardDesc}>Complete report for all classes (PP1–Grade 9) for a given exam period</p>
+            <p style={rc.cardDesc}>Complete report for all classes (PP1–Grade 9) for a given exam period</p>
 
-            <label style={s.label}>Academic Year</label>
-            <input style={s.select} type="text" value={schoolYear}
+            <label style={rc.label}>Academic Year</label>
+            <input style={rc.select} type="text" value={schoolYear}
               onChange={e => setSchoolYear(e.target.value)} placeholder="e.g. 2026" />
 
-            <label style={s.label}>Term</label>
-            <select style={s.select} value={schoolTerm} onChange={e => setSchoolTerm(e.target.value)}>
+            <label style={rc.label}>Term</label>
+            <select style={rc.select} value={schoolTerm} onChange={e => setSchoolTerm(e.target.value)}>
               <option value="1">Term 1</option>
               <option value="2">Term 2</option>
               <option value="3">Term 3</option>
             </select>
 
-            <label style={s.label}>Exam</label>
-            <select style={s.select} value={schoolExam} onChange={e => setSchoolExam(e.target.value)}>
+            <label style={rc.label}>Exam</label>
+            <select style={rc.select} value={schoolExam} onChange={e => setSchoolExam(e.target.value)}>
               <option>Opener</option>
               <option>Mid-Term</option>
               <option>End-Term</option>
             </select>
 
-            <button style={{ ...s.btn, background: '#7c3aed' }} onClick={dlSchoolReport} disabled={loading === 'school'}>
+            <button style={{ ...rc.btn, background: t.accent }} onClick={dlSchoolReport} disabled={loading === 'school'}>
               {loading === 'school' ? 'Generating...' : '⬇️ Download School Report'}
             </button>
           </div>
@@ -241,15 +248,3 @@ export default function ReportsPage() {
     </div>
   );
 }
-
-const s = {
-  pageTitle: { fontSize: 24, fontWeight: 700, color: '#1e3a5f', marginBottom: 24 },
-  grid:      { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px,1fr))', gap: 24 },
-  card:      { background: '#fff', borderRadius: 14, padding: 28, boxShadow: '0 2px 12px rgba(0,0,0,.06)', display: 'flex', flexDirection: 'column', gap: 10 },
-  cardIcon:  { fontSize: 36 },
-  cardTitle: { fontSize: 17, fontWeight: 700, color: '#1e3a5f' },
-  cardDesc:  { fontSize: 13, color: '#888', marginBottom: 8 },
-  label:     { fontSize: 12, fontWeight: 600, color: '#555' },
-  select:    { padding: '9px 12px', borderRadius: 8, border: '1.5px solid #dde3ea', fontSize: 13, background: '#fff' },
-  btn:       { marginTop: 8, padding: '11px', background: '#1e5fa0', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, cursor: 'pointer', fontSize: 14 },
-};
