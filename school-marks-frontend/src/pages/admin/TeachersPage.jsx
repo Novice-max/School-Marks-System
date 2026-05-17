@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { createTeacher } from '../../api/client';
 import api from '../../api/client';
 import { usePageStyles } from '../../styles/pageStyles';
+import Avatar from '../../components/Avatar';
+import SlideOutPanel from '../../components/SlideOutPanel';
 import toast from 'react-hot-toast';
 
 export default function TeachersPage() {
@@ -14,9 +16,12 @@ export default function TeachersPage() {
   const [resetting,   setResetting]   = useState(null);
   const [toggling,    setToggling]    = useState(null);
   const [showCreds,   setShowCreds]   = useState(null);
-  const [editModal,   setEditModal]   = useState(null);
-  const [editLoading, setEditLoading] = useState(false);
   const [form, setForm] = useState({ firstName: '', lastName: '', email: '', phone: '', username: '' });
+
+  /* ─── Detail panel state ─── */
+  const [panelTeacher, setPanelTeacher] = useState(null);
+  const [editData,     setEditData]     = useState(null);
+  const [editLoading,  setEditLoading]  = useState(false);
 
   const load = () => {
     setPageLoading(true);
@@ -40,7 +45,8 @@ export default function TeachersPage() {
     finally { setLoading(false); }
   };
 
-  const resetPassword = async (teacher) => {
+  const resetPassword = async (teacher, e) => {
+    e.stopPropagation();
     if (!window.confirm(`Reset password for ${teacher.firstName} ${teacher.lastName}?`)) return;
     setResetting(teacher.teacherId);
     try {
@@ -51,7 +57,8 @@ export default function TeachersPage() {
     finally { setResetting(null); }
   };
 
-  const toggleActive = async (teacher) => {
+  const toggleActive = async (teacher, e) => {
+    e.stopPropagation();
     const action = teacher.isActive ? 'deactivate' : 'activate';
     const msg = teacher.isActive
       ? `Deactivate ${teacher.firstName}? They will not be able to login.`
@@ -63,16 +70,18 @@ export default function TeachersPage() {
     finally { setToggling(null); }
   };
 
-  const openEdit = (tc) => setEditModal({ teacherId: tc.teacherId, firstName: tc.firstName, lastName: tc.lastName, email: tc.email || '', phone: tc.phone || '' });
+  /* ─── Panel ─── */
+  const openPanel = (tc) => {
+    setPanelTeacher(tc);
+    setEditData({ firstName: tc.firstName, lastName: tc.lastName, email: tc.email || '', phone: tc.phone || '' });
+  };
 
   const saveEdit = async () => {
     setEditLoading(true);
     try {
-      await api.put(`/admin/teachers/${editModal.teacherId}`, {
-        firstName: editModal.firstName, lastName: editModal.lastName,
-        email: editModal.email, phone: editModal.phone,
-      });
-      toast.success('Teacher updated'); setEditModal(null); load();
+      await api.put(`/admin/teachers/${panelTeacher.teacherId}`, editData);
+      toast.success('Teacher updated'); load();
+      setPanelTeacher(prev => ({ ...prev, ...editData }));
     } catch { toast.error('Failed to update teacher'); }
     finally { setEditLoading(false); }
   };
@@ -81,7 +90,7 @@ export default function TeachersPage() {
     <div>
       <h1 style={s.title}>👩‍🏫 Teachers</h1>
 
-      {/* Credentials popup */}
+      {/* ══════ CREDENTIALS POPUP ══════ */}
       {showCreds && (
         <div style={s.overlay} onClick={() => setShowCreds(null)}>
           <div style={s.modal} onClick={e => e.stopPropagation()}>
@@ -103,37 +112,70 @@ export default function TeachersPage() {
         </div>
       )}
 
-      {/* Edit modal */}
-      {editModal && (
-        <div style={s.overlay} onClick={() => setEditModal(null)}>
-          <div style={s.modal} onClick={e => e.stopPropagation()}>
-            <h3 style={s.modalTitle}>✏️ Edit Teacher</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, textAlign: 'left' }}>
-              {[
-                { key: 'firstName', label: 'First Name' },
-                { key: 'lastName',  label: 'Last Name' },
-                { key: 'email',     label: 'Email' },
-                { key: 'phone',     label: 'Phone' },
-              ].map(f => (
-                <div key={f.key}>
-                  <label style={s.label}>{f.label}</label>
-                  <input style={{ ...s.input, width: '100%', boxSizing: 'border-box' }}
-                    value={editModal[f.key]}
-                    onChange={e => setEditModal({ ...editModal, [f.key]: e.target.value })} />
+      {/* ══════ DETAIL PANEL ══════ */}
+      <SlideOutPanel
+        open={!!panelTeacher}
+        onClose={() => setPanelTeacher(null)}
+        title="Teacher Details"
+      >
+        {panelTeacher && editData && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, paddingBottom: 16, borderBottom: `1px solid ${t.border}` }}>
+              <Avatar name={`${panelTeacher.firstName} ${panelTeacher.lastName}`} size={56} />
+              <div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: t.text }}>
+                  {panelTeacher.firstName} {panelTeacher.lastName}
                 </div>
-              ))}
+                <div style={{ fontSize: 13, color: t.textFaint }}>ID: {panelTeacher.teacherId}</div>
+                <span style={{
+                  ...s.badge, marginTop: 4, display: 'inline-block',
+                  ...(panelTeacher.isActive ? s.statusActive : s.statusInactive),
+                }}>
+                  {panelTeacher.isActive ? 'Active' : 'Inactive'}
+                </span>
+              </div>
             </div>
-            <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'flex-end' }}>
-              <button style={s.btnCancel} onClick={() => setEditModal(null)}>Cancel</button>
-              <button style={s.modalBtn} onClick={saveEdit} disabled={editLoading}>
-                {editLoading ? 'Saving...' : 'Save Changes'}
+
+            {/* Read-only info */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <InfoRow label="Username" value={panelTeacher.username || '—'} tokens={t} />
+              <InfoRow label="Email" value={panelTeacher.email || '—'} tokens={t} />
+              <InfoRow label="Phone" value={panelTeacher.phone || '—'} tokens={t} />
+            </div>
+
+            {/* Editable fields */}
+            <div style={{ borderTop: `1px solid ${t.border}`, paddingTop: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: t.textMuted, marginBottom: 12 }}>Edit Details</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {[
+                  { key: 'firstName', label: 'First Name' },
+                  { key: 'lastName',  label: 'Last Name' },
+                  { key: 'email',     label: 'Email' },
+                  { key: 'phone',     label: 'Phone' },
+                ].map(f => (
+                  <div key={f.key}>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: t.textMuted, marginBottom: 3, display: 'block' }}>{f.label}</label>
+                    <input
+                      style={{ ...s.input, width: '100%', boxSizing: 'border-box' }}
+                      value={editData[f.key]}
+                      onChange={e => setEditData({ ...editData, [f.key]: e.target.value })}
+                    />
+                  </div>
+                ))}
+              </div>
+              <button
+                style={{ ...s.btn, marginTop: 16, width: '100%', textAlign: 'center', justifyContent: 'center' }}
+                onClick={saveEdit} disabled={editLoading}
+              >
+                {editLoading ? 'Saving...' : '💾 Save Changes'}
               </button>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </SlideOutPanel>
 
-      {/* Create form */}
+      {/* ══════ CREATE FORM ══════ */}
       <div style={s.card}>
         <h3 style={s.cardTitle}>Add New Teacher</h3>
         <form onSubmit={submit} style={s.form}>
@@ -160,7 +202,7 @@ export default function TeachersPage() {
         </form>
       </div>
 
-      {/* Teachers table */}
+      {/* ══════ TEACHERS TABLE ══════ */}
       <div style={s.card}>
         <h3 style={s.cardTitle}>All Teachers ({teachers.length})</h3>
         {pageLoading ? (
@@ -169,51 +211,64 @@ export default function TeachersPage() {
           <p style={s.empty}>No teachers yet.</p>
         ) : (
           <div style={s.tableWrap}>
-            <table style={s.table}>
+            <table style={{ ...s.table, minWidth: 700 }}>
               <thead>
-                <tr>{['ID', 'Name', 'Email', 'Phone', 'Status', 'Actions'].map(h => (
-                  <th key={h} style={{ ...s.th, textAlign: 'center' }}>{h}</th>
+                <tr>{['Teacher', 'Email', 'Phone', 'Status', ''].map(h => (
+                  <th key={h} style={s.th}>{h}</th>
                 ))}</tr>
               </thead>
               <tbody>
                 {teachers.map((tc, i) => (
-                  <tr key={tc.teacherId} style={{
-                    ...s.rowBg(i),
-                    ...(!tc.isActive ? { background: t.dangerBg, opacity: 0.8 } : {}),
-                  }}>
-                    <td style={{ ...s.td, textAlign: 'center' }}>{tc.teacherId}</td>
-                    <td style={{ ...s.td, textAlign: 'left', whiteSpace: 'nowrap' }}>
-                      <strong>{tc.firstName} {tc.lastName}</strong>
+                  <tr
+                    key={tc.teacherId}
+                    onClick={() => openPanel(tc)}
+                    style={{
+                      ...s.rowBg(i),
+                      cursor: 'pointer',
+                      transition: 'background 0.1s ease',
+                      ...(!tc.isActive ? { opacity: 0.6 } : {}),
+                    }}
+                    onMouseEnter={e => { if (tc.isActive) e.currentTarget.style.background = t.accentSubtle; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = s.rowBg(i).background; }}
+                  >
+                    <td style={{ ...s.td, textAlign: 'left' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <Avatar name={`${tc.firstName} ${tc.lastName}`} size={34} />
+                        <div>
+                          <div style={{ fontWeight: 600, color: t.text, whiteSpace: 'nowrap' }}>
+                            {tc.firstName} {tc.lastName}
+                          </div>
+                          <div style={{ fontSize: 11, color: t.textFaint }}>ID: {tc.teacherId}</div>
+                        </div>
+                      </div>
                     </td>
-                    <td style={{ ...s.td, textAlign: 'center' }}>{tc.email || '—'}</td>
-                    <td style={{ ...s.td, textAlign: 'center' }}>{tc.phone || '—'}</td>
-                    <td style={{ ...s.td, textAlign: 'center' }}>
+                    <td style={s.td}>{tc.email || '—'}</td>
+                    <td style={s.td}>{tc.phone || '—'}</td>
+                    <td style={s.td}>
                       <span style={{
                         ...s.badge,
                         ...(tc.isActive ? s.statusActive : s.statusInactive),
                       }}>
-                        {tc.isActive ? '✅ Active' : '🚫 Inactive'}
+                        {tc.isActive ? 'Active' : 'Inactive'}
                       </span>
                     </td>
-                    <td style={{ ...s.td, textAlign: 'center' }}>
-                      <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap' }}>
-                        <button style={s.editBtn} onClick={() => openEdit(tc)}>✏️ Edit</button>
-                        <button style={s.resetBtn} onClick={() => resetPassword(tc)}
+                    <td style={{ ...s.td, width: 140 }}>
+                      <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }} onClick={e => e.stopPropagation()}>
+                        <button style={s.resetBtn} onClick={(e) => resetPassword(tc, e)}
                           disabled={resetting === tc.teacherId || !tc.isActive}>
-                          {resetting === tc.teacherId ? '...' : '🔄 Reset'}
+                          {resetting === tc.teacherId ? '...' : '🔄'}
                         </button>
                         <button
                           style={{
-                            padding: '6px 12px', border: '1.5px solid', borderRadius: 6,
-                            cursor: 'pointer', fontWeight: 600, fontSize: 12,
-                            background: tc.isActive ? t.dangerBg : t.successBg,
+                            padding: '5px 8px', border: '1.5px solid', borderRadius: 6,
+                            cursor: 'pointer', fontWeight: 600, fontSize: 12, background: 'transparent',
                             color: tc.isActive ? t.danger : t.successText,
                             borderColor: tc.isActive ? t.dangerBorder : t.successBorder,
                           }}
-                          onClick={() => toggleActive(tc)}
+                          onClick={(e) => toggleActive(tc, e)}
                           disabled={toggling === tc.teacherId}
                         >
-                          {toggling === tc.teacherId ? '...' : tc.isActive ? '🚫 Deactivate' : '✅ Activate'}
+                          {toggling === tc.teacherId ? '...' : tc.isActive ? '🚫' : '✅'}
                         </button>
                       </div>
                     </td>
@@ -224,6 +279,15 @@ export default function TeachersPage() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function InfoRow({ label, value, tokens }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: `1px solid ${tokens.border}` }}>
+      <span style={{ fontSize: 13, color: tokens.textFaint }}>{label}</span>
+      <span style={{ fontSize: 13, fontWeight: 600, color: tokens.text }}>{value}</span>
     </div>
   );
 }

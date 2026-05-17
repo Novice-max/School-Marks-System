@@ -9,4 +9,5 @@ public interface ExamRepository extends JpaRepository<Exam, Long> {
     List<Exam> findByClassRoom_ClassIdAndTermAndAcademicYear(Long classId, Integer term, String academicYear);
     // Used by analytics trend endpoint
     List<Exam> findByClassRoom_ClassId(Long classId);
+    List<Exam> findByClassRoom_ClassIdOrderByExamIdDesc(Long classId);
 }

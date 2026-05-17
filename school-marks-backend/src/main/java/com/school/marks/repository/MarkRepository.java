@@ -23,4 +23,5 @@ public interface MarkRepository extends JpaRepository<Mark, Long> {
            "WHERE m.exam.examId = :examId AND m.student.classRoom.classId = :classId " +
            "GROUP BY m.subject.subjectName")
     List<Object[]> getSubjectAveragesByExam(@Param("examId") Long examId, @Param("classId") Long classId);
+    List<Mark> findByStudent_StudentIdAndExam_ExamId(Long studentId, Long examId);
 }

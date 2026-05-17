@@ -2,6 +2,7 @@ package com.school.marks.controller;
 import com.school.marks.model.*;
 import com.school.marks.repository.*;
 import com.school.marks.service.AuthService;
+import com.school.marks.service.MarkService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -19,7 +20,9 @@ public class AdminController {
     private final SubjectRepository subjectRepository;
     private final ExamRepository examRepository;
     private final TeacherSubjectAssignmentRepository assignmentRepository;
+    private final MarkRepository markRepository;
     private final AuthService authService;
+    private final MarkService markService;
     private final PasswordEncoder passwordEncoder;
     private final UserRepository userRepository;
 
@@ -120,37 +123,71 @@ public class AdminController {
 
     @PostMapping("/students")
     public ResponseEntity<?> createStudent(@RequestBody Map<String, Object> body) {
-    String admNo = (String) body.get("admissionNumber");
-    if (studentRepository.existsByAdmissionNumber(admNo)) {
-        return ResponseEntity.badRequest().body(Map.of("message",
-            "Admission number " + admNo + " already exists"));
+        String admNo = (String) body.get("admissionNumber");
+        if (studentRepository.existsByAdmissionNumber(admNo)) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                "Admission number " + admNo + " already exists"));
+        }
+
+        ClassRoom classRoom = classRoomRepository.findById(
+            Long.valueOf(((Map<?,?>)body.get("classRoom")).get("classId").toString())
+        ).orElseThrow(() -> new RuntimeException("Class not found"));
+
+        Student student = Student.builder()
+                .firstName((String) body.get("firstName"))
+                .lastName((String) body.get("lastName"))
+                .admissionNumber(admNo)
+                .gender((String) body.get("gender"))
+                .parentContact((String) body.get("parentContact"))
+                .classRoom(classRoom)
+                .isActive(true)
+                .build();
+
+        if (body.get("dateOfBirth") != null && !body.get("dateOfBirth").toString().isEmpty()) {
+            student.setDateOfBirth(java.time.LocalDate.parse(body.get("dateOfBirth").toString()));
+        }
+
+        return ResponseEntity.ok(studentRepository.save(student));
     }
-
-    ClassRoom classRoom = classRoomRepository.findById(
-        Long.valueOf(((Map<?,?>)body.get("classRoom")).get("classId").toString())
-    ).orElseThrow(() -> new RuntimeException("Class not found"));
-
-    Student student = Student.builder()
-            .firstName((String) body.get("firstName"))
-            .lastName((String) body.get("lastName"))
-            .admissionNumber(admNo)
-            .gender((String) body.get("gender"))
-            .parentContact((String) body.get("parentContact"))
-            .classRoom(classRoom)
-            .isActive(true)
-            .build();
-
-    if (body.get("dateOfBirth") != null && !body.get("dateOfBirth").toString().isEmpty()) {
-        student.setDateOfBirth(java.time.LocalDate.parse(body.get("dateOfBirth").toString()));
-    }
-
-    return ResponseEntity.ok(studentRepository.save(student));
-}
 
     @GetMapping("/students/class/{classId}")
     public ResponseEntity<List<Student>> getStudentsByClass(@PathVariable Long classId) {
-        // Return ALL students (active + inactive) so admin can see deactivated ones
         return ResponseEntity.ok(studentRepository.findByClassRoom_ClassId(classId));
+    }
+
+    @GetMapping("/students/{studentId}/latest-marks")
+    public ResponseEntity<?> getLatestMarks(@PathVariable Long studentId) {
+        Student student = studentRepository.findById(studentId)
+                .orElseThrow(() -> new RuntimeException("Student not found"));
+
+        List<Exam> exams = examRepository.findByClassRoom_ClassIdOrderByExamIdDesc(
+                student.getClassRoom().getClassId());
+
+        if (exams.isEmpty()) {
+            return ResponseEntity.ok(Map.of("examName", "No exams", "marks", List.of()));
+        }
+
+        Exam latestExam = exams.get(0);
+
+        List<Mark> marks = markRepository.findByStudent_StudentIdAndExam_ExamId(
+                studentId, latestExam.getExamId());
+
+        double avg = marks.stream()
+                .mapToDouble(m -> m.getScore().doubleValue())
+                .average().orElse(0);
+
+        List<Map<String, Object>> markList = marks.stream().map(m -> Map.<String, Object>of(
+                "subject", m.getSubject().getSubjectName(),
+                "score", m.getScore(),
+                "grade", m.getGrade()
+        )).toList();
+
+        return ResponseEntity.ok(Map.of(
+                "examName", latestExam.getExamName() + " T" + latestExam.getTerm(),
+                "average", Math.round(avg * 100.0) / 100.0,
+                "grade", marks.isEmpty() ? "—" : markService.calculateCbcGrade(java.math.BigDecimal.valueOf(avg)),
+                "marks", markList
+        ));
     }
 
     @PutMapping("/students/{studentId}")
