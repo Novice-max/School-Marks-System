@@ -28,30 +28,24 @@ public class MarkService {
 
     // ===================== GRADE CALCULATION =====================
 
-    public String calculateCbcGrade(BigDecimal score, int gradeLevel) {
+    public String calculateCbcGrade(BigDecimal score) {
         int s = score.intValue();
-
-        if (gradeLevel <= 3) {
-            // Lower Primary: EE/ME/AE/BE
-            if (s >= 75) return "EE";
-            if (s >= 50) return "ME";
-            if (s >= 25) return "AE";
-            return "BE";
-        } else {
-            // Upper Primary + Junior Secondary
-            if (s >= 80) return "EE";
-            if (s >= 60) return "ME";
-            if (s >= 40) return "AE";
-            return "BE";
-        }
+        if (s >= 90) return "EE1";
+        if (s >= 75) return "EE2";
+        if (s >= 58) return "ME1";
+        if (s >= 41) return "ME2";
+        if (s >= 31) return "AE1";
+        if (s >= 21) return "AE2";
+        if (s >= 11) return "BE1";
+        return "BE2";
     }
 
     public int calculateGradePoints(String grade) {
         return switch (grade) {
-            case "EE" -> 4;
-            case "ME" -> 3;
-            case "AE" -> 2;
-            default  -> 1; // BE
+            case "EE1", "EE2" -> 4;
+            case "ME1", "ME2" -> 3;
+            case "AE1", "AE2" -> 2;
+            default -> 1;
         };
     }
 
@@ -72,14 +66,14 @@ public class MarkService {
                 .orElseThrow(() -> new RuntimeException("Exam not found"));
 
         // SECURITY CHECK: Teacher can only enter marks for their assigned subject+class
-        // We check by teacherId, subjectId, and classId only — NOT by term/academicYear
-        // so that assignments remain valid across terms without needing re-assignment
         if (user.getRole() == User.Role.TEACHER) {
             boolean isAssigned = assignmentRepository
-                .existsByTeacher_TeacherIdAndSubject_SubjectIdAndClassRoom_ClassId(
+                .existsByTeacher_TeacherIdAndSubject_SubjectIdAndClassRoom_ClassIdAndAcademicYearAndTerm(
                     user.getTeacher().getTeacherId(),
                     dto.getSubjectId(),
-                    exam.getClassRoom().getClassId()
+                    exam.getClassRoom().getClassId(),
+                    exam.getAcademicYear(),
+                    exam.getTerm()
                 );
 
             if (!isAssigned) {
@@ -87,8 +81,7 @@ public class MarkService {
             }
         }
 
-        int gradeLevel = student.getClassRoom().getGradeLevel();
-        String grade = calculateCbcGrade(dto.getScore(), gradeLevel);
+        String grade = calculateCbcGrade(dto.getScore());
         int gradePoints = calculateGradePoints(grade);
 
         // Check if mark already exists (update scenario)
