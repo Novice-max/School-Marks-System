@@ -2,21 +2,22 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import Layout from './components/Layout';
-import TeacherDashboard from './pages/teacher/TeacherDashboard';
-import LoginPage          from './pages/LoginPage';
-import ChangePasswordPage from './pages/ChangePasswordPage';
-import AdminDashboard     from './pages/admin/AdminDashboard';
-import ClassesPage        from './pages/admin/ClassesPage';
-import TeachersPage       from './pages/admin/TeachersPage';
-import StudentsPage       from './pages/admin/StudentsPage';
-import ExamsPage          from './pages/admin/ExamsPage';
-import AssignmentsPage    from './pages/admin/AssignmentsPage';
-import ReportsPage        from './pages/ReportsPage';
-import MarkEntryPage      from './pages/teacher/MarkEntryPage';
+import TeacherDashboard     from './pages/teacher/TeacherDashboard';
+import LoginPage            from './pages/LoginPage';
+import ChangePasswordPage   from './pages/ChangePasswordPage';
+import AdminDashboard       from './pages/admin/AdminDashboard';
+import ClassesPage          from './pages/admin/ClassesPage';
+import TeachersPage         from './pages/admin/TeachersPage';
+import StudentsPage         from './pages/admin/StudentsPage';
+import ExamsPage            from './pages/admin/ExamsPage';
+import AssignmentsPage      from './pages/admin/AssignmentsPage';
+import ReportsPage          from './pages/ReportsPage';
+import MarkEntryPage        from './pages/teacher/MarkEntryPage';
 import TeacherAnalyticsPage from './pages/teacher/TeacherAnalyticsPage';
-import SubjectsPage from './pages/admin/SubjectsPage';
+import SubjectsPage         from './pages/admin/SubjectsPage';
 
 function PrivateRoute({ children, role }) {
   const { user } = useAuth();
@@ -51,7 +52,7 @@ function AppRoutes() {
       <Route path="/admin/assignments" element={<PrivateRoute role="ADMIN"><AssignmentsPage /></PrivateRoute>} />
       <Route path="/admin/reports"     element={<PrivateRoute role="ADMIN"><ReportsPage /></PrivateRoute>} />
 
-      <Route path="/teacher" element={<PrivateRoute><TeacherDashboard /></PrivateRoute>} />
+      <Route path="/teacher"           element={<PrivateRoute><TeacherDashboard /></PrivateRoute>} />
       <Route path="/teacher/marks"     element={<PrivateRoute><MarkEntryPage /></PrivateRoute>} />
       <Route path="/teacher/analytics" element={<PrivateRoute><TeacherAnalyticsPage /></PrivateRoute>} />
       <Route path="/teacher/reports"   element={<PrivateRoute><ReportsPage /></PrivateRoute>} />
@@ -65,10 +66,12 @@ export default function App() {
   return (
     <ErrorBoundary>
       <AuthProvider>
-        <BrowserRouter>
-          <Toaster position="top-right" />
-          <AppRoutes />
-        </BrowserRouter>
+        <ThemeProvider>
+          <BrowserRouter>
+            <Toaster position="top-right" />
+            <AppRoutes />
+          </BrowserRouter>
+        </ThemeProvider>
       </AuthProvider>
     </ErrorBoundary>
   );
