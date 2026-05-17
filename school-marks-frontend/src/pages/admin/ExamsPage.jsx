@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getClasses, getExams, createExam } from '../../api/client';
+import { usePageStyles } from '../../styles/pageStyles';
 import toast from 'react-hot-toast';
 
 const EXAM_NAMES = ['Opener', 'Mid-Term', 'End-Term'];
@@ -10,6 +11,8 @@ const classLabel = c =>
                         `Grade ${c.gradeLevel} (JSS)`;
 
 export default function ExamsPage() {
+  const s = usePageStyles();
+
   const [classes, setClasses] = useState([]);
   const [exams,   setExams]   = useState([]);
   const [loading, setLoading] = useState(false);
@@ -20,10 +23,7 @@ export default function ExamsPage() {
 
   const load = () => getExams().then(r => setExams(r.data));
 
-  useEffect(() => {
-    getClasses().then(r => setClasses(r.data));
-    load();
-  }, []);
+  useEffect(() => { getClasses().then(r => setClasses(r.data)); load(); }, []);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -31,18 +31,12 @@ export default function ExamsPage() {
     setLoading(true);
     try {
       await createExam({
-        examName:     form.examName,
-        term:         Number(form.term),
-        academicYear: form.academicYear,
-        classRoom:    { classId: Number(form.classId) },
+        examName: form.examName, term: Number(form.term),
+        academicYear: form.academicYear, classRoom: { classId: Number(form.classId) },
       });
-      toast.success('Exam created');
-      load();
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to create exam');
-    } finally {
-      setLoading(false);
-    }
+      toast.success('Exam created'); load();
+    } catch (err) { toast.error(err.response?.data?.message || 'Failed to create exam'); }
+    finally { setLoading(false); }
   };
 
   const getClassName = (exam) => {
@@ -107,7 +101,7 @@ export default function ExamsPage() {
             </thead>
             <tbody>
               {exams.map((ex, i) => (
-                <tr key={ex.examId} style={{background: i%2===0?'#f8fafc':'#fff'}}>
+                <tr key={ex.examId} style={s.rowBg(i)}>
                   <td style={s.td}>{ex.examId}</td>
                   <td style={s.td}>{getClassName(ex)}</td>
                   <td style={s.td}><strong>{ex.examName}</strong></td>
@@ -122,19 +116,3 @@ export default function ExamsPage() {
     </div>
   );
 }
-
-const s = {
-  title:     { fontSize: 24, fontWeight: 700, color: '#1e3a5f', marginBottom: 24 },
-  card:      { background: '#fff', borderRadius: 12, padding: 24, marginBottom: 20, boxShadow: '0 2px 12px rgba(0,0,0,.06)' },
-  cardTitle: { fontSize: 15, fontWeight: 700, color: '#1e3a5f', marginBottom: 16 },
-  form:      { display: 'flex', flexDirection: 'column', gap: 16 },
-  grid:      { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px,1fr))', gap: 14 },
-  field:     { display: 'flex', flexDirection: 'column', gap: 4 },
-  label:     { fontSize: 13, fontWeight: 600, color: '#555' },
-  input:     { padding: '9px 12px', borderRadius: 8, border: '1.5px solid #dde3ea', fontSize: 14, background: '#fff' },
-  btn:       { padding: '11px 28px', background: '#1e5fa0', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, cursor: 'pointer', fontSize: 14, alignSelf: 'flex-start' },
-  table:     { width: '100%', borderCollapse: 'collapse', fontSize: 14 },
-  th:        { background: '#1e3a5f', color: '#fff', padding: '10px 14px', textAlign: 'left', fontWeight: 600 },
-  td:        { padding: '10px 14px', borderBottom: '1px solid #f0f4f8' },
-  empty:     { color: '#aaa', textAlign: 'center', padding: 32 },
-};

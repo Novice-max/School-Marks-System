@@ -370,19 +370,20 @@ export default function Layout({ children }) {
     collapseBtn: {
       display: isMobile ? 'none' : 'flex',
       position: 'absolute',
-      top: 28,
-      right: -14,
+      top: 20,
+      right: 12,
       width: 28,
       height: 28,
       borderRadius: '50%',
       background: tokens.accent,
-      border: `2px solid ${tokens.surface}`,
+      border: 'none',
       alignItems: 'center',
       justifyContent: 'center',
       cursor: 'pointer',
       boxShadow: `0 2px 8px ${tokens.shadowHeavy}`,
       zIndex: 160,
-      transition: 'background 0.15s ease, transform 0.15s ease',
+      transition: 'background 0.15s ease, opacity 0.15s ease',
+      opacity: 0.85,
     },
 
     /* ─ MAIN CONTENT ─ */
@@ -495,19 +496,6 @@ export default function Layout({ children }) {
 
       {/* ══════ SIDEBAR ══════ */}
       <aside id="sidebar" style={S.sidebar}>
-
-        {/* Collapse toggle pill */}
-        <button
-          style={S.collapseBtn}
-          onClick={() => setCollapsed(c => !c)}
-          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        >
-          {collapsed
-            ? <ChevronRight size={14} color="#fff" />
-            : <ChevronLeft size={14} color="#fff" />
-          }
-        </button>
-
         {/* Brand */}
         <div style={S.brand}>
           <img src="/favicon.ico" alt="Logo" style={S.logo} />
@@ -585,6 +573,18 @@ export default function Layout({ children }) {
           </button>
         </div>
       </aside>
+
+      {/* ══════ COLLAPSE TOGGLE (outside sidebar to avoid overflow clip) ══════ */}
+      <button
+        style={S.collapseBtn}
+        onClick={() => setCollapsed(c => !c)}
+        aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+      >
+        {collapsed
+          ? <ChevronRight size={14} color="#fff" />
+          : <ChevronLeft size={14} color="#fff" />
+        }
+      </button>
 
       {/* ══════ MAIN CONTENT ══════ */}
       <main style={S.main}>

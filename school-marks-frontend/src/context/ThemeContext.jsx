@@ -2,55 +2,36 @@ import { createContext, useContext, useState, useEffect, useMemo } from 'react';
 
 const ThemeContext = createContext(null);
 
-/* ─── colour tokens ─── */
 const lightTokens = {
-  bg:             '#F7F7F5',
-  surface:        '#FFFFFF',
-  surfaceAlt:     '#EEEDFE',
-  text:           '#2C2C2A',
-  textMuted:      '#6E6E6B',
-  textFaint:      '#9C9C97',
-  accent:         '#534AB7',
-  accentHover:    '#443D9E',
-  accentSubtle:   '#EEEDFE',
-  sidebarBg:      '#FFFFFF',
-  sidebarText:    '#2C2C2A',
-  sidebarMuted:   '#6E6E6B',
-  sidebarActive:  '#EEEDFE',
-  sidebarBorder:  '#E8E8E5',
-  border:         '#E8E8E5',
-  danger:         '#D93025',
-  dangerBg:       'rgba(217,48,37,.08)',
-  shadow:         'rgba(0,0,0,.06)',
-  shadowHeavy:    'rgba(0,0,0,.12)',
-  overlay:        'rgba(0,0,0,.35)',
-  topbarBg:       '#FFFFFF',
-  notifDot:       '#D93025',
+  bg: '#F7F7F5', surface: '#FFFFFF', surfaceAlt: '#EEEDFE', rowAlt: '#F9F9F7',
+  text: '#2C2C2A', textMuted: '#6E6E6B', textFaint: '#9C9C97',
+  accent: '#534AB7', accentHover: '#443D9E', accentSubtle: '#EEEDFE',
+  inputBg: '#FFFFFF', inputBorder: '#E0E0DC',
+  border: '#E8E8E5', shadow: 'rgba(0,0,0,.06)', shadowHeavy: 'rgba(0,0,0,.12)', overlay: 'rgba(0,0,0,.35)',
+  sidebarBg: '#FFFFFF', sidebarText: '#2C2C2A', sidebarMuted: '#6E6E6B',
+  sidebarActive: '#EEEDFE', sidebarBorder: '#E8E8E5',
+  topbarBg: '#FFFFFF', notifDot: '#D93025',
+  danger: '#D93025', dangerBg: 'rgba(217,48,37,.08)', dangerBorder: '#FCA5A5',
+  successText: '#16a34a', successBg: '#dcfce7', successBorder: '#86EFAC',
+  warningText: '#92400e', warningBg: '#fef3c7', warningBorder: '#FCD34D',
+  infoText: '#2563eb', infoBg: '#dbeafe', infoBorder: '#93C5FD',
+  chartGrid: '#E8E8E5', chartText: '#6E6E6B',
 };
 
 const darkTokens = {
-  bg:             '#1C1C1E',
-  surface:        '#242426',
-  surfaceAlt:     '#26215C',
-  text:           '#E5E5E3',
-  textMuted:      '#9C9C97',
-  textFaint:      '#6E6E6B',
-  accent:         '#AFA9EC',
-  accentHover:    '#C4BFFA',
-  accentSubtle:   '#26215C',
-  sidebarBg:      '#1C1C1E',
-  sidebarText:    '#E5E5E3',
-  sidebarMuted:   '#9C9C97',
-  sidebarActive:  '#26215C',
-  sidebarBorder:  '#333336',
-  border:         '#333336',
-  danger:         '#FF6B6B',
-  dangerBg:       'rgba(255,107,107,.1)',
-  shadow:         'rgba(0,0,0,.25)',
-  shadowHeavy:    'rgba(0,0,0,.4)',
-  overlay:        'rgba(0,0,0,.55)',
-  topbarBg:       '#242426',
-  notifDot:       '#FF6B6B',
+  bg: '#1C1C1E', surface: '#242426', surfaceAlt: '#26215C', rowAlt: '#2A2A2C',
+  text: '#E5E5E3', textMuted: '#9C9C97', textFaint: '#6E6E6B',
+  accent: '#AFA9EC', accentHover: '#C4BFFA', accentSubtle: '#26215C',
+  inputBg: '#2C2C2E', inputBorder: '#3A3A3C',
+  border: '#333336', shadow: 'rgba(0,0,0,.25)', shadowHeavy: 'rgba(0,0,0,.4)', overlay: 'rgba(0,0,0,.55)',
+  sidebarBg: '#1C1C1E', sidebarText: '#E5E5E3', sidebarMuted: '#9C9C97',
+  sidebarActive: '#26215C', sidebarBorder: '#333336',
+  topbarBg: '#242426', notifDot: '#FF6B6B',
+  danger: '#FF6B6B', dangerBg: 'rgba(255,107,107,.1)', dangerBorder: 'rgba(255,107,107,.3)',
+  successText: '#4ade80', successBg: 'rgba(34,197,94,.12)', successBorder: 'rgba(74,222,128,.3)',
+  warningText: '#fbbf24', warningBg: 'rgba(234,179,8,.12)', warningBorder: 'rgba(251,191,36,.3)',
+  infoText: '#a5b4fc', infoBg: 'rgba(99,102,241,.12)', infoBorder: 'rgba(165,180,252,.3)',
+  chartGrid: '#333336', chartText: '#9C9C97',
 };
 
 const STORAGE_KEY = 'santa-ana-theme';
@@ -67,12 +48,10 @@ export function ThemeProvider({ children }) {
   const tokens = mode === 'dark' ? darkTokens : lightTokens;
   const isDark = mode === 'dark';
 
-  /* Persist preference */
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY, mode); } catch { /* noop */ }
   }, [mode]);
 
-  /* Set body background to prevent white flash */
   useEffect(() => {
     document.body.style.backgroundColor = tokens.bg;
     document.body.style.color = tokens.text;
@@ -80,20 +59,11 @@ export function ThemeProvider({ children }) {
     document.body.style.transition = 'background-color 0.3s ease, color 0.3s ease';
   }, [tokens.bg, tokens.text]);
 
-  const toggleTheme = () => setMode(m => m === 'light' ? 'dark' : 'light');
+  const toggleTheme = () => setMode(m => (m === 'light' ? 'dark' : 'light'));
 
-  const value = useMemo(() => ({
-    mode,
-    isDark,
-    tokens,
-    toggleTheme,
-  }), [mode, isDark, tokens]);
+  const value = useMemo(() => ({ mode, isDark, tokens, toggleTheme }), [mode, isDark, tokens]);
 
-  return (
-    <ThemeContext.Provider value={value}>
-      {children}
-    </ThemeContext.Provider>
-  );
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 
 export function useTheme() {
