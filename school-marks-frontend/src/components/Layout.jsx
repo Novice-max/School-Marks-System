@@ -369,21 +369,20 @@ export default function Layout({ children }) {
     /* ─ COLLAPSE TOGGLE (desktop only) ─ */
     collapseBtn: {
       display: isMobile ? 'none' : 'flex',
-      position: 'absolute',
-      top: 20,
-      right: 12,
-      width: 28,
-      height: 28,
+      position: 'fixed',
+      top: 32,
+      left: sidebarW + 8 - 16,
+      width: 32,
+      height: 32,
       borderRadius: '50%',
       background: tokens.accent,
-      border: 'none',
+      border: `3px solid ${tokens.bg}`,
       alignItems: 'center',
       justifyContent: 'center',
       cursor: 'pointer',
-      boxShadow: `0 2px 8px ${tokens.shadowHeavy}`,
-      zIndex: 160,
-      transition: 'background 0.15s ease, opacity 0.15s ease',
-      opacity: 0.85,
+      boxShadow: `0 2px 10px ${tokens.shadowHeavy}`,
+      zIndex: 200,
+      transition: 'left 0.25s cubic-bezier(.4,0,.2,1), background 0.15s ease',
     },
 
     /* ─ MAIN CONTENT ─ */
@@ -581,8 +580,8 @@ export default function Layout({ children }) {
         aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
       >
         {collapsed
-          ? <ChevronRight size={14} color="#fff" />
-          : <ChevronLeft size={14} color="#fff" />
+          ? <ChevronRight size={16} color="#fff" />
+          : <ChevronLeft size={16} color="#fff" />
         }
       </button>
 
