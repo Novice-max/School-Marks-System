@@ -3,6 +3,9 @@ import jakarta.validation.constraints.*;
 import lombok.Data;
 import java.math.BigDecimal;
 @Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class MarkEntryDTO {
     @NotNull private Long studentId;
     @NotNull private Long subjectId;
