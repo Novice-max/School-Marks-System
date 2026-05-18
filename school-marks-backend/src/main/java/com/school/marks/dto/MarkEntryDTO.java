@@ -1,6 +1,6 @@
 package com.school.marks.dto;
 import jakarta.validation.constraints.*;
-import lombok.Data;
+import lombok.*;
 import java.math.BigDecimal;
 @Data
 @Builder
