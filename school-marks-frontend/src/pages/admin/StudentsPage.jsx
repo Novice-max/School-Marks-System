@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { getClasses, getStudentsByClass, createStudent } from '../../api/client';
 import api from '../../api/client';
 import { usePageStyles } from '../../styles/pageStyles';
@@ -34,6 +34,15 @@ const gradeColor = (g) => {
   return '#888';
 };
 
+const calculateGrade = (score) => {
+  const s = parseInt(score);
+  if (isNaN(s) || score === '') return '';
+  if (s >= 90) return 'EE1'; if (s >= 75) return 'EE2';
+  if (s >= 58) return 'ME1'; if (s >= 41) return 'ME2';
+  if (s >= 31) return 'AE1'; if (s >= 21) return 'AE2';
+  if (s >= 11) return 'BE1'; return 'BE2';
+};
+
 export default function StudentsPage() {
   const s = usePageStyles();
   const t = s.tokens;
@@ -63,6 +72,15 @@ export default function StudentsPage() {
   const [marksData,    setMarksData]    = useState(null);
   const [marksLoading, setMarksLoading] = useState(false);
 
+  /* ─── Edit marks state ─── */
+  const [editMarksOpen,    setEditMarksOpen]    = useState(false);
+  const [examsList,        setExamsList]        = useState([]);
+  const [selectedEditExam, setSelectedEditExam] = useState('');
+  const [editMarksData,    setEditMarksData]    = useState([]);
+  const [editMarksLoading, setEditMarksLoading] = useState(false);
+  const [editMarksScores,  setEditMarksScores]  = useState({});
+  const [savingMarks,      setSavingMarks]      = useState(false);
+
   useEffect(() => { getClasses().then(r => setClasses(r.data)); }, []);
 
   const loadStudents = (classId) => {
@@ -89,7 +107,6 @@ export default function StudentsPage() {
       setGlobalResults([]);
       return;
     }
-
     setIsGlobalSearch(true);
     setGlobalLoading(true);
     const timer = setTimeout(() => {
@@ -97,8 +114,7 @@ export default function StudentsPage() {
         .then(r => setGlobalResults(r.data))
         .catch(() => setGlobalResults([]))
         .finally(() => setGlobalLoading(false));
-    }, 400); // debounce 400ms
-
+    }, 400);
     return () => clearTimeout(timer);
   }, [search, selClass]);
 
@@ -122,8 +138,11 @@ export default function StudentsPage() {
     const action = st.isActive !== false ? 'deactivate' : 'activate';
     if (!window.confirm(`${action === 'deactivate' ? 'Deactivate' : 'Reactivate'} ${st.firstName} ${st.lastName}?`)) return;
     setToggling(st.studentId);
-    try { await api.post(`/admin/students/${st.studentId}/${action}`); toast.success(`Student ${action}d`); if (selClass) loadStudents(selClass); }
-    catch { toast.error(`Failed to ${action} student`); }
+    try {
+      await api.post(`/admin/students/${st.studentId}/${action}`);
+      toast.success(`Student ${action}d`);
+      if (selClass) loadStudents(selClass);
+    } catch { toast.error(`Failed to ${action} student`); }
     finally { setToggling(null); }
   };
 
@@ -140,6 +159,49 @@ export default function StudentsPage() {
       .then(r => setMarksData(r.data))
       .catch(() => setMarksData(null))
       .finally(() => setMarksLoading(false));
+
+    // Reset edit marks state and preload exams
+    setEditMarksOpen(false);
+    setSelectedEditExam('');
+    setEditMarksData([]);
+    setEditMarksScores({});
+    api.get(`/admin/marks/student/${st.studentId}/exams`)
+      .then(r => setExamsList(r.data))
+      .catch(() => setExamsList([]));
+  };
+
+  const loadMarksForEdit = (studentId, examId) => {
+    setEditMarksLoading(true);
+    setEditMarksData([]);
+    api.get(`/admin/marks/student/${studentId}/exam/${examId}`)
+      .then(r => {
+        setEditMarksData(r.data);
+        const scores = {};
+        r.data.forEach(m => { scores[m.subjectId] = m.score != null ? String(m.score) : ''; });
+        setEditMarksScores(scores);
+      })
+      .catch(() => toast.error('Failed to load marks'))
+      .finally(() => setEditMarksLoading(false));
+  };
+
+  const saveMarks = async () => {
+    setSavingMarks(true);
+    try {
+      const updates = editMarksData.map(m => ({
+        subjectId: m.subjectId,
+        score: editMarksScores[m.subjectId] ?? ''
+      }));
+      const res = await api.put(
+        `/admin/marks/student/${panelStudent.studentId}/exam/${selectedEditExam}`, updates);
+      toast.success(res.data.message || 'Marks saved');
+      // Refresh the latest marks display at top of panel
+      api.get(`/admin/students/${panelStudent.studentId}/latest-marks`)
+        .then(r => setMarksData(r.data)).catch(() => {});
+    } catch {
+      toast.error('Failed to save marks');
+    } finally {
+      setSavingMarks(false);
+    }
   };
 
   const saveEdit = async () => {
@@ -167,7 +229,6 @@ export default function StudentsPage() {
     return list;
   }, [students, showInactive, search, selClass]);
 
-  /* ─── Which list to display ─── */
   const displayList = isGlobalSearch ? globalResults : filtered;
   const showGlobalMode = isGlobalSearch && search.trim().length >= 2 && !selClass;
 
@@ -179,6 +240,8 @@ export default function StudentsPage() {
       <SlideOutPanel open={!!panelStudent} onClose={() => setPanelStudent(null)} title="Student Details">
         {panelStudent && editData && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+            {/* Header */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 16, paddingBottom: 16, borderBottom: `1px solid ${t.border}` }}>
               <Avatar name={`${panelStudent.firstName} ${panelStudent.lastName}`} size={56} />
               <div>
@@ -190,6 +253,7 @@ export default function StudentsPage() {
               </div>
             </div>
 
+            {/* Info rows */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <InfoRow label="Gender" value={panelStudent.gender || '—'} tokens={t} />
               <InfoRow label="Date of Birth" value={panelStudent.dateOfBirth || '—'} tokens={t} />
@@ -197,7 +261,7 @@ export default function StudentsPage() {
               <InfoRow label="Class" value={panelStudent.classRoom ? classLabel(panelStudent.classRoom) : '—'} tokens={t} />
             </div>
 
-            {/* Latest Marks */}
+            {/* ── Latest Marks (read-only display) ── */}
             <div style={{ borderTop: `1px solid ${t.border}`, paddingTop: 16 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: t.textMuted, marginBottom: 12 }}>
                 Latest Exam {marksData?.examName ? `— ${marksData.examName}` : ''}
@@ -233,33 +297,136 @@ export default function StudentsPage() {
               )}
             </div>
 
-            {/* Editable fields */}
+            {/* ── Edit Marks ── */}
+            <div style={{ borderTop: `1px solid ${t.border}`, paddingTop: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: editMarksOpen ? 14 : 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: t.textMuted }}>✏️ Edit Marks</div>
+                <button
+                  onClick={() => setEditMarksOpen(o => !o)}
+                  style={{
+                    fontSize: 12, fontWeight: 600, padding: '4px 14px', borderRadius: 8,
+                    border: `1.5px solid ${t.border}`, background: editMarksOpen ? t.accentSubtle : 'transparent',
+                    color: t.textMuted, cursor: 'pointer', transition: 'background 0.15s'
+                  }}>
+                  {editMarksOpen ? 'Close ▲' : 'Open ▼'}
+                </button>
+              </div>
+
+              {editMarksOpen && (
+                <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {/* Exam selector */}
+                  <select
+                    style={{ ...s.input, width: '100%', boxSizing: 'border-box' }}
+                    value={selectedEditExam}
+                    onChange={e => {
+                      setSelectedEditExam(e.target.value);
+                      if (e.target.value) loadMarksForEdit(panelStudent.studentId, e.target.value);
+                      else { setEditMarksData([]); setEditMarksScores({}); }
+                    }}>
+                    <option value="">— Select Exam —</option>
+                    {examsList.map(ex => (
+                      <option key={ex.examId} value={ex.examId}>
+                        {ex.examName} — Term {ex.term} {ex.academicYear}
+                      </option>
+                    ))}
+                  </select>
+
+                  {editMarksLoading && (
+                    <div style={{ fontSize: 13, color: t.textFaint, padding: '6px 0' }}>Loading subjects...</div>
+                  )}
+
+                  {!editMarksLoading && editMarksData.length > 0 && (
+                    <>
+                      {/* Score rows */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {editMarksData.map(m => {
+                          const grade = calculateGrade(editMarksScores[m.subjectId]);
+                          return (
+                            <div key={m.subjectId} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <span style={{ fontSize: 13, color: t.text, flex: 1 }}>{m.subjectName}</span>
+                              <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                value={editMarksScores[m.subjectId] ?? ''}
+                                onChange={e => setEditMarksScores(prev => ({
+                                  ...prev, [m.subjectId]: e.target.value
+                                }))}
+                                placeholder="—"
+                                style={{ ...s.input, width: 64, textAlign: 'center', padding: '6px 8px' }}
+                              />
+                              <span style={{
+                                fontSize: 11, fontWeight: 700, color: '#fff',
+                                background: grade ? gradeColor(grade) : t.border,
+                                padding: '2px 8px', borderRadius: 10,
+                                minWidth: 38, textAlign: 'center', display: 'inline-block'
+                              }}>
+                                {grade || '—'}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <button
+                        style={{
+                          ...s.btn, width: '100%',
+                          textAlign: 'center', justifyContent: 'center',
+                          marginTop: 4
+                        }}
+                        onClick={saveMarks}
+                        disabled={savingMarks}>
+                        {savingMarks ? 'Saving...' : '💾 Save Marks'}
+                      </button>
+                    </>
+                  )}
+
+                  {!editMarksLoading && selectedEditExam && editMarksData.length === 0 && (
+                    <div style={{ fontSize: 13, color: t.textFaint, padding: '4px 0' }}>
+                      No subjects found for this exam.
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* ── Edit Student Details ── */}
             <div style={{ borderTop: `1px solid ${t.border}`, paddingTop: 16 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: t.textMuted, marginBottom: 12 }}>Edit Details</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {[
-                  { key: 'firstName', label: 'First Name' }, { key: 'lastName', label: 'Last Name' },
-                  { key: 'admissionNumber', label: 'Admission No.' }, { key: 'parentContact', label: 'Parent Contact' },
+                  { key: 'firstName', label: 'First Name' },
+                  { key: 'lastName', label: 'Last Name' },
+                  { key: 'admissionNumber', label: 'Admission No.' },
+                  { key: 'parentContact', label: 'Parent Contact' },
                 ].map(f => (
                   <div key={f.key}>
                     <label style={{ fontSize: 12, fontWeight: 600, color: t.textMuted, marginBottom: 3, display: 'block' }}>{f.label}</label>
-                    <input style={{ ...s.input, width: '100%', boxSizing: 'border-box' }}
-                      value={editData[f.key]} onChange={e => setEditData({ ...editData, [f.key]: e.target.value })} />
+                    <input
+                      style={{ ...s.input, width: '100%', boxSizing: 'border-box' }}
+                      value={editData[f.key]}
+                      onChange={e => setEditData({ ...editData, [f.key]: e.target.value })}
+                    />
                   </div>
                 ))}
                 <div>
                   <label style={{ fontSize: 12, fontWeight: 600, color: t.textMuted, marginBottom: 3, display: 'block' }}>Gender</label>
-                  <select style={{ ...s.input, width: '100%', boxSizing: 'border-box' }}
-                    value={editData.gender} onChange={e => setEditData({ ...editData, gender: e.target.value })}>
+                  <select
+                    style={{ ...s.input, width: '100%', boxSizing: 'border-box' }}
+                    value={editData.gender}
+                    onChange={e => setEditData({ ...editData, gender: e.target.value })}>
                     <option>Male</option><option>Female</option>
                   </select>
                 </div>
               </div>
-              <button style={{ ...s.btn, marginTop: 16, width: '100%', textAlign: 'center', justifyContent: 'center' }}
-                onClick={saveEdit} disabled={editLoading}>
+              <button
+                style={{ ...s.btn, marginTop: 16, width: '100%', textAlign: 'center', justifyContent: 'center' }}
+                onClick={saveEdit}
+                disabled={editLoading}>
                 {editLoading ? 'Saving...' : '💾 Save Changes'}
               </button>
             </div>
+
           </div>
         )}
       </SlideOutPanel>
@@ -270,7 +437,8 @@ export default function StudentsPage() {
         <input
           style={{ ...s.input, flex: 1, border: 'none', background: 'transparent', fontSize: 15, padding: '4px 0', outline: 'none' }}
           placeholder={selClass ? 'Search within this class...' : 'Search all students by name or admission number...'}
-          value={search} onChange={e => setSearch(e.target.value)}
+          value={search}
+          onChange={e => setSearch(e.target.value)}
         />
         {search && (
           <button onClick={() => setSearch('')}
@@ -283,9 +451,7 @@ export default function StudentsPage() {
       {/* ══════ GLOBAL SEARCH RESULTS ══════ */}
       {showGlobalMode && (
         <div style={s.card}>
-          <h3 style={s.cardTitle}>
-            Search Results {!globalLoading && `(${globalResults.length})`}
-          </h3>
+          <h3 style={s.cardTitle}>Search Results {!globalLoading && `(${globalResults.length})`}</h3>
           {globalLoading ? (
             <TableSkeleton rows={4} cols={5} />
           ) : globalResults.length === 0 ? (
@@ -294,7 +460,7 @@ export default function StudentsPage() {
             <div style={s.tableWrap}>
               <table style={{ ...s.table, minWidth: 600 }}>
                 <thead>
-                  <tr>{['#','Student','Adm No.','Class','Gender',''].map(h => <th key={h} style={s.th}>{h}</th>)}</tr>
+                  <tr>{['#', 'Student', 'Adm No.', 'Class', 'Gender', ''].map(h => <th key={h} style={s.th}>{h}</th>)}</tr>
                 </thead>
                 <tbody>
                   {globalResults.map((st, i) => (
@@ -317,9 +483,10 @@ export default function StudentsPage() {
                       </td>
                       <td style={s.td}>{st.gender}</td>
                       <td style={{ ...s.td, width: 50 }}>
-                        <button style={{ padding: '5px 8px', border: `1.5px solid ${t.dangerBorder}`, borderRadius: 6,
-                          cursor: 'pointer', fontWeight: 600, fontSize: 12, background: 'transparent', color: t.danger }}
-                          onClick={(e) => toggleActive(st, e)} disabled={toggling === st.studentId}>
+                        <button
+                          style={{ padding: '5px 8px', border: `1.5px solid ${t.dangerBorder}`, borderRadius: 6, cursor: 'pointer', fontWeight: 600, fontSize: 12, background: 'transparent', color: t.danger }}
+                          onClick={(e) => toggleActive(st, e)}
+                          disabled={toggling === st.studentId}>
                           {toggling === st.studentId ? '...' : '🚫'}
                         </button>
                       </td>
@@ -360,12 +527,12 @@ export default function StudentsPage() {
                 <div key={f.key} style={s.field}>
                   <label style={s.label}>{f.label}</label>
                   <input style={s.input} type={f.type} value={form[f.key]}
-                    onChange={e => setForm({...form, [f.key]: e.target.value})} required={f.req} />
+                    onChange={e => setForm({ ...form, [f.key]: e.target.value })} required={f.req} />
                 </div>
               ))}
               <div style={s.field}>
                 <label style={s.label}>Gender</label>
-                <select style={s.input} value={form.gender} onChange={e => setForm({...form, gender: e.target.value})}>
+                <select style={s.input} value={form.gender} onChange={e => setForm({ ...form, gender: e.target.value })}>
                   <option>Male</option><option>Female</option>
                 </select>
               </div>
@@ -396,7 +563,7 @@ export default function StudentsPage() {
             <div style={s.tableWrap}>
               <table style={{ ...s.table, minWidth: 600 }}>
                 <thead>
-                  <tr>{['#','Student','Adm No.','Gender','Parent Contact',''].map(h => <th key={h} style={s.th}>{h}</th>)}</tr>
+                  <tr>{['#', 'Student', 'Adm No.', 'Gender', 'Parent Contact', ''].map(h => <th key={h} style={s.th}>{h}</th>)}</tr>
                 </thead>
                 <tbody>
                   {filtered.map((st, i) => (
@@ -427,7 +594,8 @@ export default function StudentsPage() {
                             color: st.isActive !== false ? t.danger : t.successText,
                             borderColor: st.isActive !== false ? t.dangerBorder : t.successBorder,
                           }}
-                          onClick={(e) => toggleActive(st, e)} disabled={toggling === st.studentId}
+                          onClick={(e) => toggleActive(st, e)}
+                          disabled={toggling === st.studentId}
                           title={st.isActive !== false ? 'Deactivate' : 'Activate'}>
                           {toggling === st.studentId ? '...' : st.isActive !== false ? '🚫' : '✅'}
                         </button>
