@@ -70,6 +70,10 @@ export default function StudentsPage() {
   const [editData,     setEditData]     = useState(null);
   const [editLoading,  setEditLoading]  = useState(false);
 
+  /* ─── Panel: latest marks (read-only) ─── */
+  const [marksData,    setMarksData]    = useState(null);
+  const [marksLoading, setMarksLoading] = useState(false);
+
   /* ─── Panel: marks editor ─── */
   const [examsList,        setExamsList]        = useState([]);
   const [selectedEditExam, setSelectedEditExam] = useState('');
@@ -78,7 +82,7 @@ export default function StudentsPage() {
   const [editMarksScores,  setEditMarksScores]  = useState({});
   const [savingMarks,      setSavingMarks]      = useState(false);
 
-  /* ─── Live stats (avg + grade computed from inputs) ─── */
+  /* ─── Live stats from editor inputs ─── */
   const liveStats = useMemo(() => {
     if (!editMarksData.length) return null;
     const filled = editMarksData
@@ -159,13 +163,20 @@ export default function StudentsPage() {
       admissionNumber: st.admissionNumber, gender: st.gender || 'Male',
       parentContact: st.parentContact || '',
     });
-    // Reset marks editor
+
+    // Load latest marks (read-only display)
+    setMarksData(null);
+    setMarksLoading(true);
+    api.get(`/admin/students/${st.studentId}/latest-marks`)
+      .then(r => setMarksData(r.data))
+      .catch(() => setMarksData(null))
+      .finally(() => setMarksLoading(false));
+
+    // Reset editor and load exams
     setExamsList([]);
     setSelectedEditExam('');
     setEditMarksData([]);
     setEditMarksScores({});
-
-    // ── FIX: use existing /teacher/exams/class/ endpoint (proven working) ──
     const classId = st.classRoom?.classId;
     if (classId) {
       api.get(`/teacher/exams/class/${classId}`)
@@ -185,6 +196,9 @@ export default function StudentsPage() {
       const res = await api.put(
         `/admin/marks/student/${panelStudent.studentId}/exam/${selectedEditExam}`, updates);
       toast.success(res.data?.message || 'Marks saved');
+      // Refresh latest marks display
+      api.get(`/admin/students/${panelStudent.studentId}/latest-marks`)
+        .then(r => setMarksData(r.data)).catch(() => {});
     } catch {
       toast.error('Failed to save marks');
     } finally {
@@ -247,9 +261,47 @@ export default function StudentsPage() {
               <InfoRow label="Class"          value={panelStudent.classRoom ? classLabel(panelStudent.classRoom) : '—'} tokens={t} />
             </div>
 
-            {/* ════════════════════════════════
-                ── MARKS EDITOR (always open) ──
-                ════════════════════════════════ */}
+            {/* ════════════════════════════
+                ── 1. LATEST EXAM (read-only) ──
+                ════════════════════════════ */}
+            <div style={{ borderTop: `1px solid ${t.border}`, paddingTop: 16, marginBottom: 20 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: t.textMuted, marginBottom: 12 }}>
+                Latest Exam {marksData?.examName ? `— ${marksData.examName}` : ''}
+              </div>
+              {marksLoading ? (
+                <div style={{ fontSize: 13, color: t.textFaint, padding: '8px 0' }}>Loading marks...</div>
+              ) : marksData && marksData.marks?.length > 0 ? (
+                <>
+                  <div style={{ display: 'flex', gap: 12, marginBottom: 14 }}>
+                    <div style={{ flex: 1, background: t.rowAlt, borderRadius: 10, padding: '12px 16px', textAlign: 'center', border: `1px solid ${t.border}` }}>
+                      <div style={{ fontSize: 22, fontWeight: 800, color: t.text }}>{marksData.average}</div>
+                      <div style={{ fontSize: 11, color: t.textFaint }}>Average</div>
+                    </div>
+                    <div style={{ flex: 1, background: t.rowAlt, borderRadius: 10, padding: '12px 16px', textAlign: 'center', border: `1px solid ${t.border}` }}>
+                      <div style={{ fontSize: 22, fontWeight: 800, color: gradeColor(marksData.grade) }}>{marksData.grade}</div>
+                      <div style={{ fontSize: 11, color: t.textFaint }}>Grade</div>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {marksData.marks.map((m, i) => (
+                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: `1px solid ${t.border}` }}>
+                        <span style={{ fontSize: 13, color: t.text }}>{m.subject}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: t.text }}>{m.score}</span>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', background: gradeColor(m.grade), padding: '2px 8px', borderRadius: 10 }}>{m.grade}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div style={{ fontSize: 13, color: t.textFaint, padding: '8px 0' }}>No marks available yet.</div>
+              )}
+            </div>
+
+            {/* ════════════════════════════
+                ── 2. MARKS EDITOR ──
+                ════════════════════════════ */}
             <div style={{
               border: `1.5px solid ${t.border}`,
               borderRadius: 14,
@@ -267,7 +319,7 @@ export default function StudentsPage() {
                   <span>✏️</span>
                   <span style={{ fontSize: 13, fontWeight: 700, color: t.accent ?? '#534AB7' }}>Marks Editor</span>
                 </div>
-                {/* Live avg + grade pill — updates as you type */}
+                {/* Live avg + grade — updates as you type */}
                 {liveStats && (
                   <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                     <span style={{
@@ -309,7 +361,7 @@ export default function StudentsPage() {
                   )}
                 </div>
 
-                {/* Skeleton while loading */}
+                {/* Loading skeleton */}
                 {editMarksLoading && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {[1,2,3,4,5].map(i => (
@@ -396,16 +448,16 @@ export default function StudentsPage() {
 
                 {!selectedEditExam && examsList.length > 0 && (
                   <div style={{ fontSize: 13, color: t.textFaint, textAlign: 'center', padding: '6px 0' }}>
-                    👆 Select an exam above to view and edit marks.
+                    👆 Select an exam above to edit marks.
                   </div>
                 )}
               </div>
             </div>
 
             {/* ════════════════════
-                ── EDIT DETAILS ──
+                ── 3. EDIT DETAILS ──
                 ════════════════════ */}
-            <div style={{ border: `1.5px solid ${t.border}`, borderRadius: 14, overflow: 'hidden' }}>
+            <div style={{ border: `1.5px solid ${t.border}`, borderRadius: 14, overflow: 'hidden', marginBottom: 8 }}>
               <div style={{ padding: '11px 16px', background: t.rowAlt, borderBottom: `1px solid ${t.border}` }}>
                 <span style={{ fontSize: 13, fontWeight: 700, color: t.textMuted }}>👤 Edit Details</span>
               </div>

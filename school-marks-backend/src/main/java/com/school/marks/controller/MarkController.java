@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
@@ -26,18 +27,20 @@ public class MarkController {
     private final ExamRepository examRepository;
     private final SubjectRepository subjectRepository;
 
-    // ── Get all exams for a student's class (populates exam dropdown in UI) ──
+    // ── Get all exams for a student's class ──
     @GetMapping("/student/{studentId}/exams")
+    @Transactional(readOnly = true)
     public ResponseEntity<List<Exam>> getExamsForStudent(@PathVariable Long studentId) {
         Student student = studentRepository.findById(studentId)
                 .orElseThrow(() -> new RuntimeException("Student not found"));
-        List<Exam> exams = examRepository.findByClassRoom_ClassId(
-                student.getClassRoom().getClassId());
+        Long classId = student.getClassRoom().getClassId();
+        List<Exam> exams = examRepository.findByClassRoom_ClassId(classId);
         return ResponseEntity.ok(exams);
     }
 
-    // ── Get all subjects + current scores for a student in a specific exam ──
+    // ── Get subjects + current scores for a student in a specific exam ──
     @GetMapping("/student/{studentId}/exam/{examId}")
+    @Transactional(readOnly = true)
     public ResponseEntity<List<AdminMarkDTO>> getMarksForEdit(
             @PathVariable Long studentId,
             @PathVariable Long examId) {
@@ -45,18 +48,20 @@ public class MarkController {
         Exam exam = examRepository.findById(examId)
                 .orElseThrow(() -> new RuntimeException("Exam not found"));
 
-        // Subjects that already have marks for ANY student in this exam's class
-        List<Mark> classMarks = markRepository.findByExamIdAndClassId(
-                examId, exam.getClassRoom().getClassId());
+        Long classId = exam.getClassRoom().getClassId();
+
+        // Get subjects used in this exam for the class
+        List<Mark> classMarks = markRepository.findByExamIdAndClassId(examId, classId);
         Set<Long> usedSubjectIds = classMarks.stream()
                 .map(m -> m.getSubject().getSubjectId())
                 .collect(Collectors.toSet());
 
-        // Fall back to all subjects if exam has no marks yet
+        // Fall back to all subjects if exam is fresh (no marks yet)
+        List<Subject> allSubjects = subjectRepository.findAll();
         List<Subject> subjects = usedSubjectIds.isEmpty()
-                ? subjectRepository.findAll()
-                : subjectRepository.findAll().stream()
-                        .filter(s -> usedSubjectIds.contains(s.getSubjectId()))
+                ? allSubjects
+                : allSubjects.stream()
+                        .filter(sub -> usedSubjectIds.contains(sub.getSubjectId()))
                         .collect(Collectors.toList());
 
         // This student's existing marks for this exam
@@ -82,7 +87,7 @@ public class MarkController {
         return ResponseEntity.ok(result);
     }
 
-    // ── Bulk save / update marks for a student in an exam (admin override) ──
+    // ── Bulk save / update marks for a student in an exam ──
     @PutMapping("/student/{studentId}/exam/{examId}")
     public ResponseEntity<?> saveMarks(
             @PathVariable Long studentId,
@@ -93,7 +98,6 @@ public class MarkController {
         int saved = 0;
         for (Map<String, Object> update : updates) {
             Object scoreObj = update.get("score");
-            // Skip blanks — don't wipe existing marks, just leave them
             if (scoreObj == null || scoreObj.toString().isBlank()) continue;
 
             BigDecimal score = new BigDecimal(scoreObj.toString());
