@@ -121,6 +121,14 @@ public class AdminController {
     @GetMapping("/students")
     public ResponseEntity<List<Student>> getAllStudents() { return ResponseEntity.ok(studentRepository.findAll()); }
 
+    @GetMapping("/students/search")
+    public ResponseEntity<List<Student>> searchStudents(@RequestParam String q) {
+        if (q == null || q.trim().length() < 2) {
+            return ResponseEntity.ok(List.of());
+        }
+        return ResponseEntity.ok(studentRepository.searchByNameOrAdmission(q.trim()));
+    }
+
     @PostMapping("/students")
     public ResponseEntity<?> createStudent(@RequestBody Map<String, Object> body) {
         String admNo = (String) body.get("admissionNumber");
