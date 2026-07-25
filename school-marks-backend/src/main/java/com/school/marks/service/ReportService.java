@@ -62,12 +62,11 @@ public class ReportService {
     // ─── Page 2 density helpers ───
     // Scales all spacing on page 2 by subject count so it always fits in 2 pages.
     // ≤7 subjects → comfortable  |  8–9 → medium  |  10+ → compact
-    private float p2CellPad(int n) { return n >= 10 ? 3f : n >= 8 ? 4f : 5f; }
-    private float p2BarH(int n)    { return n >= 10 ? 6f : n >= 8 ? 7f : 9f; }
-    private float p2StatPad(int n) { return n >= 10 ? 3f : n >= 8 ? 4f : 6f; }
-    private float p2Margin(int n)  { return n >= 10 ? 5f : n >= 8 ? 7f : 10f; }
-    private float p2SigH(int n)    { return n >= 10 ? 30f : n >= 8 ? 36f : 44f; }
-
+    private float p2CellPad(int n) { return n >= 8 ? 3f : n >= 6 ? 4f : 5f; }
+private float p2BarH(int n)    { return n >= 8 ? 6f : n >= 6 ? 7f : 9f; }
+private float p2StatPad(int n) { return n >= 8 ? 3f : n >= 6 ? 4f : 6f; }
+private float p2Margin(int n)  { return n >= 8 ? 5f : n >= 6 ? 7f : 10f; }
+private float p2SigH(int n)    { return n >= 8 ? 30f : n >= 6 ? 36f : 44f; }
     // ══════════════════════════════════════════════════════════════
     //  CLASS MARKLIST PDF
     // ══════════════════════════════════════════════════════════════
@@ -683,24 +682,24 @@ public class ReportService {
     //  SIGNATURES — dynamic height based on subject count
     // ══════════════════════════════════════════════════════════════
     private void buildSignatures(Document doc, PdfFont bold, PdfFont regular, int sTotal) {
-        float sigH = p2SigH(sTotal);
-        Table t = new Table(UnitValue.createPercentArray(new float[]{38, 38, 24}))
-                .setWidth(UnitValue.createPercentValue(100)).setMarginTop(8);
-        String[][] sigs = {
-            {"HEAD TEACHER'S SIGNATURE:", "________________________________"},
-            {"CLASS TEACHER'S SIGNATURE:", "____________________________"},
-            {"DATE:", "____________________"}
-        };
-        for (String[] sig : sigs) {
-            t.addCell(new Cell()
-                .add(new Paragraph(sig[0]).setFont(bold).setFontSize(7.5f))
-                .add(new Paragraph(sig[1]).setFont(regular).setFontSize(10))
-                .setBorder(Border.NO_BORDER)
-                .setMinHeight(sigH)
-                .setVerticalAlignment(VerticalAlignment.BOTTOM)
-                .setPaddingRight(10).setPaddingBottom(2));
-        }
-        doc.add(t);
+    float spacerPt = p2SigH(sTotal) >= 44f ? 14f : p2SigH(sTotal) >= 36f ? 10f : 6f;
+    Table t = new Table(UnitValue.createPercentArray(new float[]{38, 38, 24}))
+            .setWidth(UnitValue.createPercentValue(100)).setMarginTop(8)
+            .setKeepTogether(true);
+    String[][] sigs = {
+        {"HEAD TEACHER'S SIGNATURE:", "________________________________"},
+        {"CLASS TEACHER'S SIGNATURE:", "____________________________"},
+        {"DATE:", "____________________"}
+    };
+    for (String[] sig : sigs) {
+        t.addCell(new Cell()
+            .add(new Paragraph(sig[0]).setFont(bold).setFontSize(7.5f))
+            .add(new Paragraph(" ").setFontSize(spacerPt))
+            .add(new Paragraph(sig[1]).setFont(regular).setFontSize(10))
+            .setBorder(Border.NO_BORDER)
+            .setPaddingRight(10).setPaddingBottom(2));
+    }
+    doc.add(t);
     }
 
     private void buildDates(Document doc, PdfFont regular) {
