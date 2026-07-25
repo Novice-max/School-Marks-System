@@ -237,7 +237,6 @@ public class ReportService {
                 .add(new Text(generateFacilitatorComment(student.getFirstName(), alvl, gl)).setFont(boldItalic).setFontSize(9f))
                 .setMarginTop(8));
         buildSignatures(doc, bold, regular, st);
-        buildDates(doc, regular);
         doc.close(); return baos.toByteArray();
     }
 
@@ -357,7 +356,6 @@ public class ReportService {
                 .setMarginTop(p2Mrg));
         buildCoreCompetencies(doc, bold, regular, snapFont, cellPad, p2Mrg);
         buildSignatures(doc, bold, regular, sTotal);
-        buildDates(doc, regular);
         doc.close(); return baos.toByteArray();
     }
 
@@ -507,7 +505,6 @@ public class ReportService {
                     .setMarginTop(p2Mrg));
             buildCoreCompetencies(doc, bold, regular, snapFont, cellPad, p2Mrg);
             buildSignatures(doc, bold, regular, sTotal);
-            buildDates(doc, regular);
             count++;
         }
         if (count==0) throw new RuntimeException("No report cards could be generated \u2014 ensure marks are entered");
@@ -703,6 +700,14 @@ public class ReportService {
                 .setVerticalAlignment(VerticalAlignment.BOTTOM)
                 .setPaddingRight(10).setPaddingBottom(2));
         }
+        doc.add(t);
+    }
+
+    private void buildDates(Document doc, PdfFont regular) {
+        Table t = new Table(UnitValue.createPercentArray(new float[]{50,50}))
+                .setWidth(UnitValue.createPercentValue(100)).setMarginTop(4);
+        t.addCell(new Cell().add(new Paragraph("CLOSING DATE:  ________________________").setFont(regular).setFontSize(9)).setBorder(Border.NO_BORDER));
+        t.addCell(new Cell().add(new Paragraph("OPENING DATE:  ________________________").setFont(regular).setFontSize(9).setTextAlignment(TextAlignment.RIGHT)).setBorder(Border.NO_BORDER));
         doc.add(t);
     }
 
