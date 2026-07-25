@@ -240,7 +240,7 @@ public class ReportService {
                 .add(new Text("FACILITATOR'S COMMENT:  ").setFont(bold).setFontSize(9f))
                 .add(new Text(generateFacilitatorComment(student.getFirstName(), alvl, gl)).setFont(boldItalic).setFontSize(9f))
                 .setMarginTop(8));
-        buildSignatures(doc, bold, regular);
+        buildSignatures(doc, bold, regular,st);
         buildDates(doc, regular);
         doc.close(); return baos.toByteArray();
     }
@@ -359,7 +359,7 @@ public class ReportService {
                 .add(new Text(generateFacilitatorComment(student.getFirstName(), aC>0?getGrade(oAvg):"ME1", gl)).setFont(boldItalic).setFontSize(snapFont + 1f))
                 .setMarginTop(p2Margin));
         buildCoreCompetencies(doc, bold, regular, snapFont, cellPad, p2Margin);
-        buildSignatures(doc, bold, regular);
+        buildSignatures(doc, bold, regular,sTotal);
         buildDates(doc, regular);
         doc.close(); return baos.toByteArray();
     }
@@ -511,7 +511,7 @@ public class ReportService {
                     .add(new Text(generateFacilitatorComment(student.getFirstName(), aC>0?getGrade(oAvg):"ME1", gl)).setFont(boldItalic).setFontSize(snapFont + 1f))
                     .setMarginTop(p2Mrg));
             buildCoreCompetencies(doc, bold, regular, snapFont, cellPad, p2Mrg);
-            buildSignatures(doc, bold, regular);
+            buildSignatures(doc, bold, regular,sTotal);
             buildDates(doc, regular);
             count++;
         }
@@ -678,12 +678,13 @@ public class ReportService {
                 .setMarginTop(topMargin).setMarginBottom(cellPad));
 
         Table comp = new Table(UnitValue.createPercentArray(new float[]{52, 12, 12, 12, 12}))
-                .setWidth(UnitValue.createPercentValue(100));
+        .setWidth(UnitValue.createPercentValue(100))
+        .setKeepTogether(true); // never split across pages
 
         for (String h : new String[]{"Competency", "EE", "ME", "AE", "BE"})
             comp.addCell(new Cell().add(new Paragraph(h).setFont(bold).setFontSize(fs - 0.5f))
                     .setBackgroundColor(TABLE_HEADER_BG)
-                    .setTextAlignment(TextAlignment.CENTER).setPadding(cellPad + 1));
+                    .setTextAlignment(TextAlignment.CENTER).setPadding(cellPad)); // was cellPad+1
 
         boolean alt = false;
         for (String c : new String[]{
@@ -697,14 +698,13 @@ public class ReportService {
         }) {
             DeviceRgb rb = alt ? ALT_ROW_COLOR : null;
             comp.addCell(new Cell().add(new Paragraph(c).setFont(regular).setFontSize(fs - 0.5f))
-                    .setBackgroundColor(rb).setPadding(cellPad + 1));
+                    .setBackgroundColor(rb).setPadding(cellPad)); // was cellPad+1
             for (int i = 0; i < 4; i++)
                 comp.addCell(new Cell().setBackgroundColor(rb)
-                        .setTextAlignment(TextAlignment.CENTER).setPadding(cellPad + 1).setMinHeight(14));
+                        .setTextAlignment(TextAlignment.CENTER).setPadding(cellPad)); // removed setMinHeight(14)
             alt = !alt;
         }
         doc.add(comp);
-    }
 
     // ══════════════════════════════════════════════════════════════
     //  SNAPSHOT HELPERS
@@ -873,24 +873,26 @@ public class ReportService {
             r.addCell(new Cell().add(new Paragraph(m).setFont(regular).setFontSize(9)).setTextAlignment(TextAlignment.CENTER).setPadding(4));
         doc.add(r);
     }
-    private void buildSignatures(Document doc, PdfFont bold, PdfFont regular) {
-        Table t = new Table(UnitValue.createPercentArray(new float[]{38, 38, 24}))
-                .setWidth(UnitValue.createPercentValue(100)).setMarginTop(14);
-        String[][] sigs = {
-            {"HEAD TEACHER'S SIGNATURE:", "________________________________"},
-            {"CLASS TEACHER'S SIGNATURE:", "____________________________"},
-            {"DATE:", "____________________"}
-        };
-        for (String[] sig : sigs) {
-            t.addCell(new Cell()
-                .add(new Paragraph(sig[0]).setFont(bold).setFontSize(7.5f))
-                .add(new Paragraph(sig[1]).setFont(regular).setFontSize(10))
-                .setBorder(Border.NO_BORDER)
-                .setMinHeight(52f)
-                .setVerticalAlignment(VerticalAlignment.BOTTOM)
-                .setPaddingRight(10).setPaddingBottom(2));
-        }
-        doc.add(t);
+   private void buildSignatures(Document doc, PdfFont bold, PdfFont regular, int sTotal) { 
+    // Dynamic height — less space for classes with many subjects
+    float sigH = sTotal >= 10 ? 30f : sTotal >= 8 ? 36f : 44f;
+    Table t = new Table(UnitValue.createPercentArray(new float[]{38, 38, 24}))
+            .setWidth(UnitValue.createPercentValue(100)).setMarginTop(8);
+    String[][] sigs = {
+        {"HEAD TEACHER'S SIGNATURE:", "________________________________"},
+        {"CLASS TEACHER'S SIGNATURE:", "____________________________"},
+        {"DATE:", "____________________"}
+    };
+    for (String[] sig : sigs) {
+        t.addCell(new Cell()
+            .add(new Paragraph(sig[0]).setFont(bold).setFontSize(7.5f))
+            .add(new Paragraph(sig[1]).setFont(regular).setFontSize(10))
+            .setBorder(Border.NO_BORDER)
+            .setMinHeight(sigH)
+            .setVerticalAlignment(VerticalAlignment.BOTTOM)
+            .setPaddingRight(10).setPaddingBottom(2));
+    }
+    doc.add(t);
     }
     private void buildDates(Document doc, PdfFont regular) {
         Table t = new Table(UnitValue.createPercentArray(new float[]{50,50})).setWidth(UnitValue.createPercentValue(100)).setMarginTop(8);
