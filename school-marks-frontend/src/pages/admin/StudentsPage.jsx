@@ -14,6 +14,7 @@ const classLabel = (c) =>
                         `Grade ${c.gradeLevel} (JSS) — ${c.academicYear}`;
 
 const shortClassLabel = (c) =>
+  c.gradeLevel === -2 ? `Playgroup — ${c.academicYear}` :
   c.gradeLevel === -1 ? 'PP1' :
   c.gradeLevel === 0  ? 'PP2' :
   `Grade ${c.gradeLevel}`;

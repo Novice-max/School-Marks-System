@@ -13,6 +13,7 @@ function savePdf(blob, filename) {
 }
 
 const classLabel = c =>
+  c.gradeLevel === -2 ? `Playgroup — ${c.academicYear}` :
   c.gradeLevel === -1 ? 'PP1 (Pre-Primary 1)' :
   c.gradeLevel === 0  ? 'PP2 (Pre-Primary 2)' :
   c.gradeLevel <= 6   ? `Grade ${c.gradeLevel} (Primary)` :
