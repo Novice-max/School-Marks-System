@@ -59,7 +59,7 @@ public class ReportService {
     }
 
     // ══════════════════════════════════════════════════════════════
-    //  CLASS MARKLIST PDF  (unchanged)
+    //  CLASS MARKLIST PDF
     // ══════════════════════════════════════════════════════════════
     public byte[] generateClassMarklistPdf(Long examId) throws Exception {
         Exam exam = examRepository.findById(examId)
@@ -95,10 +95,14 @@ public class ReportService {
         List<String> allSubjects = new ArrayList<>(subjectSet);
         int subjectCount = allSubjects.size();
 
+        // FIX: ensure column widths sum to exactly 100 — last subject absorbs float remainder
         float[] colWidths = new float[3 + subjectCount + 3];
         colWidths[0] = 3; colWidths[1] = 7; colWidths[2] = 11;
-        float perSubject = (100f - 36f) / subjectCount;
-        for (int i = 0; i < subjectCount; i++) colWidths[3 + i] = perSubject;
+        float subjectTotal = 64f; // 100 - 36 fixed columns
+        float perSubject = subjectTotal / subjectCount;
+        for (int i = 0; i < subjectCount - 1; i++) colWidths[3 + i] = perSubject;
+        // Last subject column absorbs any floating-point remainder so total == exactly 100
+        colWidths[3 + subjectCount - 1] = subjectTotal - perSubject * (subjectCount - 1);
         colWidths[3 + subjectCount]     = 5;
         colWidths[3 + subjectCount + 1] = 5;
         colWidths[3 + subjectCount + 2] = 5;
@@ -275,13 +279,22 @@ public class ReportService {
 
     // ══════════════════════════════════════════════════════════════
     //  COMBINED TERM REPORT — DYNAMIC 1/2/3 EXAMS + SNAPSHOT
+    //  FIX: N+1 eliminated — class computation now uses batch fetch
+    //  (3 queries total regardless of class size, was N*3 before)
     // ══════════════════════════════════════════════════════════════
     public byte[] generateTermReportPdf(Long studentId, Long classId, Integer term, String academicYear) throws Exception {
         Student student = studentRepository.findById(studentId).orElseThrow(() -> new RuntimeException("Student not found"));
         ClassRoom classRoom = classRoomRepository.findById(classId).orElseThrow(() -> new RuntimeException("Class not found"));
         List<Exam> allExams = examRepository.findByClassRoom_ClassIdAndTermAndAcademicYear(classId, term, academicYear);
-        List<ExamSlot> slots = detectExamSlots(allExams, studentId);
-        if (slots.isEmpty()) throw new RuntimeException("No exams found for Term " + term + " " + academicYear);
+
+        // FIX: load ALL marks in batch (1 query per exam, not 1 per student per exam)
+        List<BatchExamSlot> batchSlots = detectBatchExamSlots(allExams);
+        if (batchSlots.isEmpty()) throw new RuntimeException("No exams found for Term " + term + " " + academicYear);
+
+        // Reconstruct this student's ExamSlots from the already-fetched batch data
+        List<ExamSlot> slots = batchSlots.stream()
+                .map(bs -> new ExamSlot(bs.header, bs.allMarks.getOrDefault(studentId, Collections.emptyMap())))
+                .collect(Collectors.toList());
 
         List<Subject> subjects = subjectRepository.findByLevelType(classRoom.getLevelType());
         int sTotal = subjects.size();
@@ -289,24 +302,33 @@ public class ReportService {
         int gl = classRoom.getGradeLevel();
         String ll = getLevelLabel(gl);
 
-        // ── Pre-compute class averages for snapshot ──
+        // Class-level stats for snapshot — computed from batch data, zero extra queries
         List<Student> allStudents = studentRepository.findByClassRoom_ClassIdAndIsActiveTrue(classId);
         Map<Long, Map<String, Double>> allStudentSubjectAvgs = new LinkedHashMap<>();
         Map<Long, Double> allStudentOverallAvgs = new LinkedHashMap<>();
 
         for (Student stu : allStudents) {
-            List<ExamSlot> stuSlots = detectExamSlots(allExams, stu.getStudentId());
+            // Pull this student's marks from already-loaded batch — no DB call
+            List<Map<String, BigDecimal>> stuMaps = new ArrayList<>();
+            for (BatchExamSlot bs : batchSlots)
+                stuMaps.add(bs.allMarks.getOrDefault(stu.getStudentId(), Collections.emptyMap()));
+
             Map<String, Double> subAvgs = new LinkedHashMap<>();
-            double totalAvg = 0; int avgCount = 0;
+            double totalAvg = 0; int avgCount = 0; boolean hasAny = false;
+
             for (Subject sub : subjects) {
                 double sum = 0; int cnt = 0;
-                for (ExamSlot es : stuSlots) {
-                    BigDecimal score = es.marks.get(sub.getSubjectName());
-                    if (score != null) { sum += score.doubleValue(); cnt++; }
+                for (Map<String, BigDecimal> m : stuMaps) {
+                    BigDecimal score = m.get(sub.getSubjectName());
+                    if (score != null) { sum += score.doubleValue(); cnt++; hasAny = true; }
                 }
-                if (cnt > 0) { double a = sum / cnt; subAvgs.put(sub.getSubjectName(), a); totalAvg += a; avgCount++; }
+                if (cnt > 0) {
+                    double a = sum / cnt;
+                    subAvgs.put(sub.getSubjectName(), a);
+                    totalAvg += a; avgCount++;
+                }
             }
-            if (avgCount > 0) {
+            if (hasAny && avgCount > 0) {
                 allStudentSubjectAvgs.put(stu.getStudentId(), subAvgs);
                 allStudentOverallAvgs.put(stu.getStudentId(), totalAvg / avgCount);
             }
@@ -317,7 +339,7 @@ public class ReportService {
         Map<Long, Integer> positions = computePositions(allStudentOverallAvgs);
         int totalRanked = positions.size();
 
-        float ch = 70+30+(ll.isEmpty()?0:15)+20+40+(sTotal*rh)+rh+10+40+20+40+25+80; // +80 for snapshot
+        float ch = 70+30+(ll.isEmpty()?0:15)+20+40+(sTotal*rh)+rh+10+40+20+40+25+80;
         float am = Math.max((842f-ch)/2f, 18f);
 
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -366,7 +388,6 @@ public class ReportService {
 
         doc.add(mt);
 
-        // ── Performance Snapshot ──
         Map<String, Double> stuSubjectAvgs = allStudentSubjectAvgs.getOrDefault(studentId, Collections.emptyMap());
         Integer stuPosition = positions.get(studentId);
         buildPerformanceSnapshot(doc, bold, regular, stuSubjectAvgs, classSubjectAverages,
@@ -381,7 +402,7 @@ public class ReportService {
     }
 
     // ══════════════════════════════════════════════════════════════
-    //  ALL TERM REPORTS FOR A CLASS — WITH SNAPSHOT
+    //  ALL TERM REPORTS FOR A CLASS — WITH SNAPSHOT (unchanged)
     // ══════════════════════════════════════════════════════════════
     public byte[] generateAllTermReportsPdf(Long classId, Integer term, String academicYear) throws Exception {
         ClassRoom classRoom = classRoomRepository.findById(classId).orElseThrow(() -> new RuntimeException("Class not found"));
@@ -395,9 +416,6 @@ public class ReportService {
         List<BatchExamSlot> bSlots = detectBatchExamSlots(allExams);
         if (bSlots.isEmpty()) throw new RuntimeException("No exams found for Term " + term + " " + academicYear);
 
-        // ══════════════════════════════════════════════════════════
-        //  PRE-COMPUTE: class subject averages + student positions
-        // ══════════════════════════════════════════════════════════
         Map<Long, Map<String, Double>> allStudentSubjectAvgs = new LinkedHashMap<>();
         Map<Long, Double> allStudentOverallAvgs = new LinkedHashMap<>();
 
@@ -433,8 +451,6 @@ public class ReportService {
         Map<Long, Integer> positions = computePositions(allStudentOverallAvgs);
         int totalRanked = positions.size();
 
-        // ══════════════════════════════════════════════════════════
-
         byte[] logoBytes = null;
         try (InputStream ls = ReportService.class.getResourceAsStream("/static/school_logo.png")) { if (ls!=null) logoBytes=ls.readAllBytes(); } catch (Exception ignored){}
 
@@ -445,7 +461,7 @@ public class ReportService {
         float rh=rowHeight(sTotal), bf=bodyFont(sTotal), hf=headerFont(sTotal);
         int gl=classRoom.getGradeLevel(); String ll=getLevelLabel(gl);
         String gLabel = gl==-1?"PP1":gl==0?"PP2":"GRADE "+gl;
-        float ch=70+30+(ll.isEmpty()?0:15)+20+40+(sTotal*rh)+rh+10+80+40+20+40+25; // +80 for snapshot
+        float ch=70+30+(ll.isEmpty()?0:15)+20+40+(sTotal*rh)+rh+10+80+40+20+40+25;
         float am=Math.max((842f-ch)/2f,18f); float tm=Math.min(am,36f), bm=Math.min(am,36f);
 
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -466,7 +482,6 @@ public class ReportService {
 
             if (count>0) doc.add(new AreaBreak(AreaBreakType.NEXT_PAGE));
 
-            // Header
             Table ht = new Table(UnitValue.createPercentArray(new float[]{18,82})).setWidth(UnitValue.createPercentValue(100));
             if (logoBytes!=null) {
                 Image logo = new Image(ImageDataFactory.create(logoBytes)).setWidth(52).setHeight(52);
@@ -491,7 +506,6 @@ public class ReportService {
             ng.addCell(new Cell().add(new Paragraph(gLabel).setFont(bold).setFontSize(9).setTextAlignment(TextAlignment.RIGHT)).setBorder(Border.NO_BORDER));
             doc.add(ng);
 
-            // Dynamic marks table
             Table mt = buildDynamicTableHeader(examHeaders, bf, hf);
             boolean alt = false;
             double[] sTotals = new double[bSlots.size()]; int[] sCounts = new int[bSlots.size()];
@@ -519,14 +533,12 @@ public class ReportService {
             addMarkCell(mt,aC>0?getGrade(oAvg):"",bold,bf-1,TOTAL_ROW_BG,TextAlignment.CENTER,rh);
             doc.add(mt);
 
-            // ── Performance Snapshot ──
             Map<String, Double> stuSubjectAvgs = allStudentSubjectAvgs.getOrDefault(student.getStudentId(), Collections.emptyMap());
             Integer stuPosition = positions.get(student.getStudentId());
             float snapFont = Math.max(bf - 1, 7f);
             buildPerformanceSnapshot(doc, bold, regular, stuSubjectAvgs, classSubjectAverages,
                     oAvg, classOverallAvg, stuPosition, totalRanked, snapFont);
 
-            // Rubric
             doc.add(new Paragraph(" ").setMarginTop(4).setFontSize(2));
             Table rub = new Table(UnitValue.createPercentArray(new float[]{14,11,11,11,11,11,11,11,9})).setWidth(UnitValue.createPercentValue(100));
             for (String l : new String[]{"RUBRIC","EE 1","EE 2","ME 1","ME 2","AE 1","AE 2","BE 1","BE 2"})
@@ -555,40 +567,31 @@ public class ReportService {
     }
 
     // ══════════════════════════════════════════════════════════════
-    //  PERFORMANCE SNAPSHOT — Student vs Class comparison table
+    //  PERFORMANCE SNAPSHOT
     // ══════════════════════════════════════════════════════════════
     private void buildPerformanceSnapshot(Document doc, PdfFont bold, PdfFont regular,
             Map<String, Double> studentAvgs, Map<String, Double> classAvgs,
             double studentOverall, double classOverall,
             Integer position, int totalStudents, float fs) {
 
-        // Section header
         doc.add(new Paragraph("PERFORMANCE SNAPSHOT").setFont(bold).setFontSize(fs + 1)
                 .setFontColor(SNAPSHOT_HEADER).setTextAlignment(TextAlignment.CENTER)
                 .setMarginTop(8).setMarginBottom(2));
 
-        // Summary stats row
         Table summary = new Table(UnitValue.createPercentArray(new float[]{25, 25, 25, 25}))
                 .setWidth(UnitValue.createPercentValue(100));
 
         double diff = studentOverall - classOverall;
-
-        addSnapshotStat(summary, bold, regular, fs, "Student Avg",
-                String.format("%.1f", studentOverall), getGrade(studentOverall));
-        addSnapshotStat(summary, bold, regular, fs, "Class Avg",
-                String.format("%.1f", classOverall), getGrade(classOverall));
-        addSnapshotStat(summary, bold, regular, fs, "Position",
-                position != null ? position + " / " + totalStudents : "\u2014", "");
-        addSnapshotStat(summary, bold, regular, fs, "vs Class",
-                String.format("%+.1f", diff), diff >= 0 ? "Above" : "Below");
+        addSnapshotStat(summary, bold, regular, fs, "Student Avg", String.format("%.1f", studentOverall), getGrade(studentOverall));
+        addSnapshotStat(summary, bold, regular, fs, "Class Avg", String.format("%.1f", classOverall), getGrade(classOverall));
+        addSnapshotStat(summary, bold, regular, fs, "Position", position != null ? position + " / " + totalStudents : "\u2014", "");
+        addSnapshotStat(summary, bold, regular, fs, "vs Class", String.format("%+.1f", diff), diff >= 0 ? "Above" : "Below");
         doc.add(summary);
 
-        // Subject comparison table
         if (!classAvgs.isEmpty()) {
             Table comp = new Table(UnitValue.createPercentArray(new float[]{32, 14, 14, 12, 28}))
                     .setWidth(UnitValue.createPercentValue(100)).setMarginTop(3);
 
-            // Headers
             for (String h : new String[]{"Subject", "Student", "Class", "Diff", "Status"}) {
                 comp.addCell(new Cell().add(new Paragraph(h).setFont(bold).setFontSize(fs - 1))
                         .setBackgroundColor(SNAPSHOT_HEADER).setFontColor(ColorConstants.WHITE)
@@ -609,45 +612,26 @@ public class ReportService {
                 String clsStr = String.format("%.1f", clsAvg);
                 double subDiff = stuScore != null ? stuScore - clsAvg : 0;
                 String diffStr = stuScore != null ? String.format("%+.1f", subDiff) : "\u2014";
-                String status;
-                DeviceRgb statusBg;
+                String status; DeviceRgb statusBg;
 
-                if (stuScore == null) {
-                    status = "\u2014"; statusBg = null;
-                } else if (subDiff >= 5) {
-                    status = "\u25B2 Strong"; statusBg = new DeviceRgb(220, 252, 231); strengths.add(subName);
-                } else if (subDiff >= 0) {
-                    status = "\u25CF On Track"; statusBg = new DeviceRgb(254, 249, 195);
-                } else if (subDiff >= -5) {
-                    status = "\u25BD Below"; statusBg = new DeviceRgb(255, 247, 237);
-                } else {
-                    status = "\u25BC Needs Support"; statusBg = new DeviceRgb(254, 226, 226); needsSupport.add(subName);
-                }
+                if (stuScore == null) { status = "\u2014"; statusBg = null; }
+                else if (subDiff >= 5) { status = "\u25B2 Strong"; statusBg = new DeviceRgb(220, 252, 231); strengths.add(subName); }
+                else if (subDiff >= 0) { status = "\u25CF On Track"; statusBg = new DeviceRgb(254, 249, 195); }
+                else if (subDiff >= -5) { status = "\u25BD Below"; statusBg = new DeviceRgb(255, 247, 237); }
+                else { status = "\u25BC Needs Support"; statusBg = new DeviceRgb(254, 226, 226); needsSupport.add(subName); }
 
-                comp.addCell(new Cell().add(new Paragraph(subName).setFont(regular).setFontSize(fs - 1))
-                        .setPadding(2).setTextAlignment(TextAlignment.LEFT)
-                        .setBackgroundColor(rb));
-                comp.addCell(new Cell().add(new Paragraph(stuStr).setFont(bold).setFontSize(fs - 1))
-                        .setPadding(2).setTextAlignment(TextAlignment.CENTER)
-                        .setBackgroundColor(rb));
-                comp.addCell(new Cell().add(new Paragraph(clsStr).setFont(regular).setFontSize(fs - 1))
-                        .setPadding(2).setTextAlignment(TextAlignment.CENTER)
-                        .setBackgroundColor(rb));
-                comp.addCell(new Cell().add(new Paragraph(diffStr).setFont(bold).setFontSize(fs - 1)
-                        .setFontColor(stuScore != null && subDiff >= 0 ? EE_COLOR : BE_COLOR))
-                        .setPadding(2).setTextAlignment(TextAlignment.CENTER)
-                        .setBackgroundColor(rb));
-                Cell statusCell = new Cell().add(new Paragraph(status).setFont(regular).setFontSize(fs - 2))
-                        .setPadding(2).setTextAlignment(TextAlignment.CENTER);
+                comp.addCell(new Cell().add(new Paragraph(subName).setFont(regular).setFontSize(fs - 1)).setPadding(2).setTextAlignment(TextAlignment.LEFT).setBackgroundColor(rb));
+                comp.addCell(new Cell().add(new Paragraph(stuStr).setFont(bold).setFontSize(fs - 1)).setPadding(2).setTextAlignment(TextAlignment.CENTER).setBackgroundColor(rb));
+                comp.addCell(new Cell().add(new Paragraph(clsStr).setFont(regular).setFontSize(fs - 1)).setPadding(2).setTextAlignment(TextAlignment.CENTER).setBackgroundColor(rb));
+                comp.addCell(new Cell().add(new Paragraph(diffStr).setFont(bold).setFontSize(fs - 1).setFontColor(stuScore != null && subDiff >= 0 ? EE_COLOR : BE_COLOR)).setPadding(2).setTextAlignment(TextAlignment.CENTER).setBackgroundColor(rb));
+                Cell statusCell = new Cell().add(new Paragraph(status).setFont(regular).setFontSize(fs - 2)).setPadding(2).setTextAlignment(TextAlignment.CENTER);
                 if (statusBg != null) statusCell.setBackgroundColor(statusBg);
                 else if (rb != null) statusCell.setBackgroundColor(rb);
                 comp.addCell(statusCell);
-
                 alt = !alt;
             }
             doc.add(comp);
 
-            // Strengths / Needs Support summary line
             String strengthsStr = strengths.isEmpty() ? "\u2014" : String.join(", ", strengths);
             String supportStr = needsSupport.isEmpty() ? "\u2014" : String.join(", ", needsSupport);
             doc.add(new Paragraph("Strengths: " + strengthsStr + "     |     Needs Support: " + supportStr)
@@ -677,13 +661,8 @@ public class ReportService {
         Map<String, Double> result = new LinkedHashMap<>();
         for (Subject sub : subjects) {
             List<Double> scores = new ArrayList<>();
-            allStudentSubjectAvgs.values().forEach(map -> {
-                Double score = map.get(sub.getSubjectName());
-                if (score != null) scores.add(score);
-            });
-            if (!scores.isEmpty()) {
-                result.put(sub.getSubjectName(), scores.stream().mapToDouble(d -> d).average().orElse(0));
-            }
+            allStudentSubjectAvgs.values().forEach(map -> { Double score = map.get(sub.getSubjectName()); if (score != null) scores.add(score); });
+            if (!scores.isEmpty()) result.put(sub.getSubjectName(), scores.stream().mapToDouble(d -> d).average().orElse(0));
         }
         return result;
     }
@@ -692,9 +671,7 @@ public class ReportService {
         List<Map.Entry<Long, Double>> ranked = new ArrayList<>(overallAvgs.entrySet());
         ranked.sort((a, b) -> Double.compare(b.getValue(), a.getValue()));
         Map<Long, Integer> positions = new LinkedHashMap<>();
-        for (int i = 0; i < ranked.size(); i++) {
-            positions.put(ranked.get(i).getKey(), i + 1);
-        }
+        for (int i = 0; i < ranked.size(); i++) positions.put(ranked.get(i).getKey(), i + 1);
         return positions;
     }
 
