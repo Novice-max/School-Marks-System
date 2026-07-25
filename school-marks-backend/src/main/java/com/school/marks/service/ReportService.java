@@ -706,14 +706,6 @@ public class ReportService {
         doc.add(t);
     }
 
-    private void buildDates(Document doc, PdfFont regular) {
-        Table t = new Table(UnitValue.createPercentArray(new float[]{50,50}))
-                .setWidth(UnitValue.createPercentValue(100)).setMarginTop(4);
-        t.addCell(new Cell().add(new Paragraph("CLOSING DATE:  ________________________").setFont(regular).setFontSize(9)).setBorder(Border.NO_BORDER));
-        t.addCell(new Cell().add(new Paragraph("OPENING DATE:  ________________________").setFont(regular).setFontSize(9).setTextAlignment(TextAlignment.RIGHT)).setBorder(Border.NO_BORDER));
-        doc.add(t);
-    }
-
     // ══════════════════════════════════════════════════════════════
     //  SNAPSHOT HELPERS
     // ══════════════════════════════════════════════════════════════
