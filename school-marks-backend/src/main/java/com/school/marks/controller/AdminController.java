@@ -239,7 +239,10 @@ public class AdminController {
 
     // ── Exams ──
     @GetMapping("/exams")
-    public ResponseEntity<List<Exam>> getAllExams() { return ResponseEntity.ok(examRepository.findAll()); }
+    @Transactional(readOnly = true)
+    public ResponseEntity<List<Exam>> getAllExams() {
+        return ResponseEntity.ok(examRepository.findAllByOrderByAcademicYearDescTermAscExamNameAsc());
+    }
 
     @PostMapping("/exams")
     public ResponseEntity<Exam> createExam(@RequestBody Map<String, Object> body) {
@@ -255,6 +258,42 @@ public class AdminController {
                 .build();
 
         return ResponseEntity.ok(examRepository.save(exam));
+    }
+
+    @PostMapping("/exams/school")
+    @Transactional
+    public ResponseEntity<?> createSchoolExam(@RequestBody Map<String, Object> body) {
+        String examName     = (String) body.get("examName");
+        Integer term        = Integer.parseInt(body.get("term").toString());
+        String academicYear = (String) body.get("academicYear");
+        if (examRepository.existsByExamNameAndTermAndAcademicYear(examName, term, academicYear))
+            return ResponseEntity.badRequest().body(Map.of("message", examName + " already exists for Term " + term + " " + academicYear));
+        List<ClassRoom> classes = classRoomRepository.findByAcademicYear(academicYear);
+        if (classes.isEmpty())
+            return ResponseEntity.badRequest().body(Map.of("message", "No classes found for " + academicYear));
+        List<Exam> created = new ArrayList<>();
+        for (ClassRoom cr : classes) {
+            Exam exam = new Exam();
+            exam.setExamName(examName);
+            exam.setTerm(term);
+            exam.setAcademicYear(academicYear);
+            exam.setClassRoom(cr);
+            created.add(examRepository.save(exam));
+        }
+        return ResponseEntity.ok(Map.of("message", examName + " created for " + created.size() + " classes", "count", created.size()));
+    }
+
+    @DeleteMapping("/exams/school/{examName}/{term}/{academicYear}")
+    @Transactional
+    public ResponseEntity<?> deleteSchoolExam(
+            @PathVariable String examName,
+            @PathVariable Integer term,
+            @PathVariable String academicYear) {
+        List<Exam> exams = examRepository.findByExamNameAndTermAndAcademicYear(examName, term, academicYear);
+        if (exams.isEmpty()) return ResponseEntity.notFound().build();
+        for (Exam exam : exams) markRepository.deleteByExam_ExamId(exam.getExamId());
+        examRepository.deleteAll(exams);
+        return ResponseEntity.ok(Map.of("message", examName + " deleted for " + exams.size() + " classes"));
     }
 
     // ── Assignments ──
@@ -292,46 +331,5 @@ public class AdminController {
     public ResponseEntity<String> removeAssignment(@PathVariable Long assignmentId) {
         assignmentRepository.deleteById(assignmentId);
         return ResponseEntity.ok("Assignment removed");
-    }
-    @GetMapping("/exams")
-    @Transactional(readOnly = true)
-    public ResponseEntity<List<Exam>> getAllExams() {
-        return ResponseEntity.ok(examRepository.findAllByOrderByAcademicYearDescTermAscExamNameAsc());
-    }
-
-    @PostMapping("/exams/school")
-    @Transactional
-    public ResponseEntity<?> createSchoolExam(@RequestBody Map<String, Object> body) {
-        String examName    = (String) body.get("examName");
-        Integer term       = Integer.parseInt(body.get("term").toString());
-        String academicYear = (String) body.get("academicYear");
-        if (examRepository.existsByExamNameAndTermAndAcademicYear(examName, term, academicYear))
-            return ResponseEntity.badRequest().body(Map.of("message", examName + " already exists for Term " + term + " " + academicYear));
-        List<ClassRoom> classes = classRoomRepository.findByAcademicYear(academicYear);
-        if (classes.isEmpty())
-            return ResponseEntity.badRequest().body(Map.of("message", "No classes found for " + academicYear));
-        List<Exam> created = new ArrayList<>();
-        for (ClassRoom cr : classes) {
-            Exam exam = new Exam();
-            exam.setExamName(examName);
-            exam.setTerm(term);
-            exam.setAcademicYear(academicYear);
-            exam.setClassRoom(cr);
-            created.add(examRepository.save(exam));
-        }
-        return ResponseEntity.ok(Map.of("message", examName + " created for " + created.size() + " classes", "count", created.size()));
-    }
-
-    @DeleteMapping("/exams/school/{examName}/{term}/{academicYear}")
-    @Transactional
-    public ResponseEntity<?> deleteSchoolExam(
-            @PathVariable String examName,
-            @PathVariable Integer term,
-            @PathVariable String academicYear) {
-        List<Exam> exams = examRepository.findByExamNameAndTermAndAcademicYear(examName, term, academicYear);
-        if (exams.isEmpty()) return ResponseEntity.notFound().build();
-        for (Exam exam : exams) markRepository.deleteByExam_ExamId(exam.getExamId());
-        examRepository.deleteAll(exams);
-        return ResponseEntity.ok(Map.of("message", examName + " deleted for " + exams.size() + " classes"));
     }
 }
