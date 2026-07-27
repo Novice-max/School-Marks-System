@@ -1,5 +1,5 @@
 import { useState, useEffect, useContext } from 'react';
-import api from '../../api';
+import api from '../../api/client';
 import { ThemeContext } from '../../context/ThemeContext';
 
 const EXAM_NAMES = ['Opener', 'Mid-Term', 'End-Term'];
