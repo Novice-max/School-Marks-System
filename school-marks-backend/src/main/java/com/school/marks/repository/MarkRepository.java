@@ -6,6 +6,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.transaction.annotation.Transactional;
 
 public interface MarkRepository extends JpaRepository<Mark, Long> {
 
@@ -26,5 +28,4 @@ public interface MarkRepository extends JpaRepository<Mark, Long> {
     List<Mark> findByStudent_StudentIdAndExam_ExamId(Long studentId, Long examId);
     @Modifying
     @Transactional
-    void deleteByExam_ExamId(Long examId);
 }
