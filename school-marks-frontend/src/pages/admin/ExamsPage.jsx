@@ -1,11 +1,12 @@
-import { useState, useEffect, useContext } from 'react';
+import { useState, useEffect } from 'react';
 import api from '../../api/client';
-import { ThemeContext } from '../../context/ThemeContext';
+import { usePageStyles } from '../../styles/pageStyles';
 
 const EXAM_NAMES = ['Opener', 'Mid-Term', 'End-Term'];
 
 export default function ExamsPage() {
-  const { s } = useContext(ThemeContext);
+  const s = usePageStyles();
+  const t = s.tokens;
 
   const [exams, setExams]         = useState([]);
   const [classes, setClasses]     = useState([]);
@@ -22,7 +23,6 @@ export default function ExamsPage() {
     academicYear: currentYear,
   });
 
-  // Grouped view: { "Opener||1||2026": [exam, exam, ...] }
   const [grouped, setGrouped] = useState({});
 
   const load = () =>
@@ -81,7 +81,6 @@ export default function ExamsPage() {
     }
   };
 
-  // Sort group keys: newest year first, then term asc, then name
   const sortedKeys = Object.keys(grouped).sort((a, b) => {
     const [nameA, termA, yearA] = a.split('||');
     const [nameB, termB, yearB] = b.split('||');
@@ -94,20 +93,18 @@ export default function ExamsPage() {
     <div style={s.page}>
       <h1 style={s.title}>📋 Exams</h1>
 
-      {/* CREATE FORM */}
       <div style={s.card}>
         <h3 style={s.cardTitle}>Create School-Wide Exam</h3>
         <p style={{ ...s.label, marginBottom: 16, opacity: 0.7 }}>
           Creates one exam record for every class in the selected academic year.
         </p>
 
-        {error   && <div style={{ padding: '10px 14px', borderRadius: 8, marginBottom: 12, background: 'var(--dangerBg)', color: 'var(--danger)', border: '1px solid var(--dangerBorder)', fontSize: 14 }}>{error}</div>}
-        {success && <div style={{ padding: '10px 14px', borderRadius: 8, marginBottom: 12, background: 'var(--successBg)', color: 'var(--successText)', border: '1px solid var(--successBorder)', fontSize: 14 }}>{success}</div>}
+        {error && <div style={{ padding: '10px 14px', borderRadius: 8, marginBottom: 12, background: t.dangerBg, color: t.danger, border: `1px solid ${t.dangerBorder}`, fontSize: 14 }}>{error}</div>}
+        {success && <div style={{ padding: '10px 14px', borderRadius: 8, marginBottom: 12, background: t.successBg, color: t.successText, border: `1px solid ${t.successBorder}`, fontSize: 14 }}>{success}</div>}
 
         <form onSubmit={handleCreate} style={s.form}>
           <div style={s.grid}>
 
-            {/* Exam Name */}
             <div style={s.field}>
               <label style={s.label}>Exam Name</label>
               <select
@@ -120,7 +117,6 @@ export default function ExamsPage() {
               </select>
             </div>
 
-            {/* Term */}
             <div style={s.field}>
               <label style={s.label}>Term</label>
               <select
@@ -134,7 +130,6 @@ export default function ExamsPage() {
               </select>
             </div>
 
-            {/* Academic Year */}
             <div style={s.field}>
               <label style={s.label}>Academic Year</label>
               <input
@@ -154,7 +149,6 @@ export default function ExamsPage() {
         </form>
       </div>
 
-      {/* GROUPED EXAM LIST */}
       <div style={s.card}>
         <h3 style={s.cardTitle}>All Exams ({exams.length} records across {sortedKeys.length} exam sets)</h3>
 
@@ -171,24 +165,23 @@ export default function ExamsPage() {
                 <div
                   key={key}
                   style={{
-                    border: `1px solid var(--border)`,
+                    border: `1px solid ${t.border}`,
                     borderRadius: 8,
                     overflow: 'hidden',
                   }}
                 >
-                  {/* Group header */}
                   <div style={{
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     padding: '10px 16px',
-                    background: 'var(--surface2)',
-                    borderBottom: `1px solid var(--border)`,
+                    background: t.surfaceAlt,
+                    borderBottom: `1px solid ${t.border}`,
                   }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                       <strong style={{ fontSize: 15 }}>{examName}</strong>
                       <span style={{
-                        background: 'var(--primary)',
+                        background: t.accent,
                         color: '#fff',
                         borderRadius: 4,
                         padding: '2px 8px',
@@ -211,7 +204,6 @@ export default function ExamsPage() {
                     </button>
                   </div>
 
-                  {/* Class list inside group */}
                   <div style={{
                     display: 'flex',
                     flexWrap: 'wrap',
@@ -232,8 +224,8 @@ export default function ExamsPage() {
                           <span
                             key={exam.examId}
                             style={{
-                              background: 'var(--surface)',
-                              border: '1px solid var(--border)',
+                              background: t.surface,
+                              border: `1px solid ${t.border}`,
                               borderRadius: 6,
                               padding: '3px 10px',
                               fontSize: 13,
