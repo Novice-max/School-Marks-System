@@ -2,17 +2,17 @@ package com.school.marks.repository;
 
 import com.school.marks.model.Mark;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.Optional;
-import org.springframework.data.jpa.repository.Modifying;
-import org.springframework.transaction.annotation.Transactional;
 
 public interface MarkRepository extends JpaRepository<Mark, Long> {
 
     Optional<Mark> findByStudent_StudentIdAndSubject_SubjectIdAndExam_ExamId(
-        Long studentId, Long subjectId, Long examId);
+            Long studentId, Long subjectId, Long examId);
 
     List<Mark> findByExam_ExamIdAndSubject_SubjectId(Long examId, Long subjectId);
 
@@ -22,10 +22,13 @@ public interface MarkRepository extends JpaRepository<Mark, Long> {
     List<Mark> findByExamIdAndClassId(@Param("examId") Long examId, @Param("classId") Long classId);
 
     @Query("SELECT m.subject.subjectName, AVG(m.score) FROM Mark m " +
-           "WHERE m.exam.examId = :examId AND m.student.classRoom.classId = :classId " +
-           "GROUP BY m.subject.subjectName")
+            "WHERE m.exam.examId = :examId AND m.student.classRoom.classId = :classId " +
+            "GROUP BY m.subject.subjectName")
     List<Object[]> getSubjectAveragesByExam(@Param("examId") Long examId, @Param("classId") Long classId);
+
     List<Mark> findByStudent_StudentIdAndExam_ExamId(Long studentId, Long examId);
+
     @Modifying
     @Transactional
+    void deleteByExam_ExamId(Long examId);
 }
