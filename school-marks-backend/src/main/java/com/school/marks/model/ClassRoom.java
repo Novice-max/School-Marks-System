@@ -31,6 +31,7 @@ public class ClassRoom {
     private String academicYear;
 
     public String getDisplayName() {
+        if (gradeLevel == -2) return "Playgroup";
         if (gradeLevel == -1) return "Pre-Primary 1 (PP1)";
         if (gradeLevel == 0)  return "Pre-Primary 2 (PP2)";
         if (gradeLevel <= 6)  return "Grade " + gradeLevel;

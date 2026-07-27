@@ -8,6 +8,7 @@ import TableSkeleton from '../../components/TableSkeleton';
 import toast from 'react-hot-toast';
 
 const classLabel = (c) =>
+  c.gradeLevel === -2 ? `Playgroup — ${c.academicYear}` :
   c.gradeLevel === -1 ? `PP1 (Pre-Primary 1) — ${c.academicYear}` :
   c.gradeLevel === 0  ? `PP2 (Pre-Primary 2) — ${c.academicYear}` :
   c.gradeLevel <= 6   ? `Grade ${c.gradeLevel} (Primary) — ${c.academicYear}` :
