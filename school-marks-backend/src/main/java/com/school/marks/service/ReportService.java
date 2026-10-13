@@ -3,8 +3,13 @@ package com.school.marks.service;
 import com.itextpdf.io.image.ImageDataFactory;
 import com.itextpdf.kernel.colors.ColorConstants;
 import com.itextpdf.kernel.colors.DeviceRgb;
+import com.itextpdf.kernel.events.PdfDocumentEvent;
 import com.itextpdf.kernel.font.*;
+import com.itextpdf.kernel.geom.Rectangle;
 import com.itextpdf.kernel.pdf.*;
+import com.itextpdf.kernel.pdf.canvas.PdfCanvas;
+import com.itextpdf.kernel.pdf.extgstate.PdfExtGState;
+import com.itextpdf.kernel.pdf.xobject.PdfImageXObject;
 import com.itextpdf.layout.Document;
 import com.itextpdf.layout.borders.Border;
 import com.itextpdf.layout.borders.SolidBorder;
@@ -15,6 +20,7 @@ import com.school.marks.dto.SubjectMarkDTO;
 import com.school.marks.model.*;
 import com.school.marks.repository.*;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayOutputStream;
@@ -25,6 +31,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ReportService {
@@ -48,6 +55,9 @@ public class ReportService {
     private static final DeviceRgb BAR_BG          = new DeviceRgb(228, 228, 235);
     private static final DeviceRgb CLASS_BAR_COLOR = new DeviceRgb(160, 160, 170);
 
+    private static final float WATERMARK_OPACITY = 0.07f;
+    private static final float WATERMARK_SCALE   = 0.30f;
+
     private static class ExamSlot {
         final String header;
         final Map<String, BigDecimal> marks;
@@ -61,12 +71,75 @@ public class ReportService {
 
     // ─── Page 2 density helpers ───
     // Scales all spacing on page 2 by subject count so it always fits in 2 pages.
-    // ≤7 subjects → comfortable  |  8–9 → medium  |  10+ → compact
+    // ≤5 subjects → comfortable  |  6–7 → medium  |  8+ → compact
     private float p2CellPad(int n) { return n >= 8 ? 3f : n >= 6 ? 4f : 5f; }
-private float p2BarH(int n)    { return n >= 8 ? 6f : n >= 6 ? 7f : 9f; }
-private float p2StatPad(int n) { return n >= 8 ? 3f : n >= 6 ? 4f : 6f; }
-private float p2Margin(int n)  { return n >= 8 ? 5f : n >= 6 ? 7f : 10f; }
-private float p2SigH(int n)    { return n >= 8 ? 30f : n >= 6 ? 36f : 44f; }
+    private float p2BarH(int n)    { return n >= 8 ? 6f : n >= 6 ? 7f : 9f; }
+    private float p2StatPad(int n) { return n >= 8 ? 3f : n >= 6 ? 4f : 6f; }
+    private float p2Margin(int n)  { return n >= 8 ? 5f : n >= 6 ? 7f : 10f; }
+    private float p2SigH(int n)    { return n >= 8 ? 30f : n >= 6 ? 36f : 44f; }
+
+    // ══════════════════════════════════════════════════════════════
+    //  WATERMARK
+    //  Logo drawn at 7% opacity, centred, on every page.
+    //  Drawn into a content stream BEFORE the page content, so it sits
+    //  underneath text/tables. Opaque cell backgrounds will cover it.
+    // ══════════════════════════════════════════════════════════════
+    private byte[] loadLogoBytes() {
+        try (InputStream ls = ReportService.class.getResourceAsStream("/static/school_logo.png")) {
+            if (ls == null) {
+                log.warn("School logo not found at /static/school_logo.png — watermark disabled");
+                return null;
+            }
+            return ls.readAllBytes();
+        } catch (Exception e) {
+            log.warn("Failed to read school logo — watermark disabled", e);
+            return null;
+        }
+    }
+
+    private void addWatermarkHandler(PdfDocument pdf, byte[] logoBytes) {
+        if (logoBytes == null) return;
+
+        // Build ONE image XObject per document and reuse it on every page.
+        // Drawing from ImageData would embed a fresh copy of the PNG on each page.
+        final PdfImageXObject logo;
+        try {
+            logo = new PdfImageXObject(ImageDataFactory.create(logoBytes));
+        } catch (Exception e) {
+            log.warn("Failed to decode school logo — watermark disabled", e);
+            return;
+        }
+        final PdfExtGState faded = new PdfExtGState()
+                .setFillOpacity(WATERMARK_OPACITY)
+                .setStrokeOpacity(WATERMARK_OPACITY);
+
+        pdf.addEventHandler(PdfDocumentEvent.END_PAGE, event -> {
+            try {
+                PdfDocumentEvent de = (PdfDocumentEvent) event;
+                PdfPage page = de.getPage();
+                Rectangle ps = page.getPageSize();
+                float w = ps.getWidth();
+                float h = ps.getHeight();
+                float size = Math.min(w, h) * WATERMARK_SCALE;
+
+                PdfCanvas canvas = new PdfCanvas(
+                        page.newContentStreamBefore(), page.getResources(), de.getDocument());
+                canvas.saveState();
+                canvas.setExtGState(faded);
+                canvas.addXObjectWithTransformationMatrix(
+                        logo,
+                        size, 0, 0, size,
+                        ps.getLeft() + (w - size) / 2f,
+                        ps.getBottom() + (h - size) / 2f);
+                canvas.restoreState();
+                canvas.release();
+            } catch (Exception e) {
+                // A watermark failure must never kill a report card — log and continue
+                log.warn("Watermark failed on a page", e);
+            }
+        });
+    }
+
     // ══════════════════════════════════════════════════════════════
     //  CLASS MARKLIST PDF
     // ══════════════════════════════════════════════════════════════
@@ -77,6 +150,7 @@ private float p2SigH(int n)    { return n >= 8 ? 30f : n >= 6 ? 36f : 44f; }
 
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         PdfDocument pdf = new PdfDocument(new PdfWriter(baos));
+        addWatermarkHandler(pdf, loadLogoBytes());
         pdf.setDefaultPageSize(com.itextpdf.kernel.geom.PageSize.A4.rotate());
         Document doc = new Document(pdf);
         doc.setMargins(30, 30, 30, 30);
@@ -167,6 +241,7 @@ private float p2SigH(int n)    { return n >= 8 ? 30f : n >= 6 ? 36f : 44f; }
 
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         PdfDocument pdf = new PdfDocument(new PdfWriter(baos));
+        addWatermarkHandler(pdf, loadLogoBytes());
         Document doc = new Document(pdf);
         doc.setMargins(36, 36, 36, 36);
 
@@ -296,6 +371,7 @@ private float p2SigH(int n)    { return n >= 8 ? 30f : n >= 6 ? 36f : 44f; }
 
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         PdfDocument pdf = new PdfDocument(new PdfWriter(baos));
+        addWatermarkHandler(pdf, loadLogoBytes());
         Document doc = new Document(pdf);
         doc.setMargins(28, 36, 28, 36);
 
@@ -404,8 +480,7 @@ private float p2SigH(int n)    { return n >= 8 ? 30f : n >= 6 ? 36f : 44f; }
         Map<Long, Integer> positions = computePositions(allStudentOverallAvgs);
         int totalRanked = positions.size();
 
-        byte[] logoBytes = null;
-        try (InputStream ls = ReportService.class.getResourceAsStream("/static/school_logo.png")) { if (ls!=null) logoBytes=ls.readAllBytes(); } catch (Exception ignored){}
+        byte[] logoBytes = loadLogoBytes();
 
         PdfFont bold       = PdfFontFactory.createFont(com.itextpdf.io.font.constants.StandardFonts.HELVETICA_BOLD);
         PdfFont regular    = PdfFontFactory.createFont(com.itextpdf.io.font.constants.StandardFonts.HELVETICA);
@@ -420,8 +495,16 @@ private float p2SigH(int n)    { return n >= 8 ? 30f : n >= 6 ? 36f : 44f; }
 
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         PdfDocument pdf = new PdfDocument(new PdfWriter(baos));
+        addWatermarkHandler(pdf, logoBytes);
         Document doc = new Document(pdf, com.itextpdf.kernel.geom.PageSize.A4);
         doc.setMargins(25, 36, 25, 36);
+
+        // One header-logo XObject for the whole batch — embedded once, referenced on every student's page 1
+        PdfImageXObject headerLogo = null;
+        if (logoBytes != null) {
+            try { headerLogo = new PdfImageXObject(ImageDataFactory.create(logoBytes)); }
+            catch (Exception e) { log.warn("Failed to decode header logo — headers will render without it", e); }
+        }
 
         List<String> examHeaders = bSlots.stream().map(s -> s.header).collect(Collectors.toList());
         int count = 0;
@@ -438,8 +521,8 @@ private float p2SigH(int n)    { return n >= 8 ? 30f : n >= 6 ? 36f : 44f; }
 
             // ── PAGE 1 ──
             Table ht = new Table(UnitValue.createPercentArray(new float[]{18,82})).setWidth(UnitValue.createPercentValue(100));
-            if (logoBytes!=null) {
-                Image logo = new Image(ImageDataFactory.create(logoBytes)).setWidth(52).setHeight(52);
+            if (headerLogo!=null) {
+                Image logo = new Image(headerLogo).setWidth(52).setHeight(52);
                 ht.addCell(new Cell().add(logo).setBorder(Border.NO_BORDER).setVerticalAlignment(VerticalAlignment.MIDDLE).setHorizontalAlignment(HorizontalAlignment.CENTER));
             } else ht.addCell(new Cell().setBorder(Border.NO_BORDER));
             ht.addCell(new Cell()
@@ -512,6 +595,10 @@ private float p2SigH(int n)    { return n >= 8 ? 30f : n >= 6 ? 36f : 44f; }
 
     // ══════════════════════════════════════════════════════════════
     //  PERFORMANCE SNAPSHOT
+    //  Subject-by-subject comparison table + strengths/needs-support line.
+    //  (4-stat summary row removed.)
+    //  NOTE: studentOverall, classOverall, position, totalStudents and statPad
+    //  are currently unused — kept so call sites don't change.
     // ══════════════════════════════════════════════════════════════
     private void buildPerformanceSnapshot(Document doc, PdfFont bold, PdfFont regular,
             Map<String, Double> studentAvgs, Map<String, Double> classAvgs,
@@ -521,15 +608,6 @@ private float p2SigH(int n)    { return n >= 8 ? 30f : n >= 6 ? 36f : 44f; }
         doc.add(new Paragraph("PERFORMANCE SNAPSHOT").setFont(bold).setFontSize(fs + 1)
                 .setFontColor(SNAPSHOT_HEADER).setTextAlignment(TextAlignment.CENTER)
                 .setMarginTop(4).setMarginBottom(cellPad));
-
-        Table summary = new Table(UnitValue.createPercentArray(new float[]{25, 25, 25, 25}))
-                .setWidth(UnitValue.createPercentValue(100));
-        double diff = studentOverall - classOverall;
-        addSnapshotStat(summary, bold, regular, fs, "Student Avg", String.format("%.1f", studentOverall), getGrade(studentOverall), statPad);
-        addSnapshotStat(summary, bold, regular, fs, "Class Avg",   String.format("%.1f", classOverall),   getGrade(classOverall), statPad);
-        addSnapshotStat(summary, bold, regular, fs, "Position",    position != null ? position + " / " + totalStudents : "\u2014", "", statPad);
-        addSnapshotStat(summary, bold, regular, fs, "vs Class",    String.format("%+.1f", diff), diff >= 0 ? "Above" : "Below", statPad);
-        doc.add(summary);
 
         if (!classAvgs.isEmpty()) {
             Table comp = new Table(UnitValue.createPercentArray(new float[]{32, 14, 14, 12, 28}))
@@ -572,18 +650,6 @@ private float p2SigH(int n)    { return n >= 8 ? 30f : n >= 6 ? 36f : 44f; }
                     + "     |     Needs Support: " + (needsSupport.isEmpty() ? "\u2014" : String.join(", ", needsSupport)))
                     .setFont(regular).setFontSize(fs-1).setMarginTop(cellPad).setMarginBottom(2));
         }
-    }
-
-    private void addSnapshotStat(Table table, PdfFont bold, PdfFont regular,
-            float fs, String label, String value, String sublabel, float pad) {
-        Cell cell = new Cell()
-                .add(new Paragraph(value).setFont(bold).setFontSize(fs+2).setTextAlignment(TextAlignment.CENTER))
-                .add(new Paragraph(label).setFont(regular).setFontSize(fs-1).setTextAlignment(TextAlignment.CENTER));
-        if (sublabel != null && !sublabel.isEmpty())
-            cell.add(new Paragraph(sublabel).setFont(regular).setFontSize(fs-1).setTextAlignment(TextAlignment.CENTER)
-                    .setFontColor(sublabel.equals("Above") ? EE_COLOR : sublabel.equals("Below") ? BE_COLOR : HEADER_COLOR));
-        cell.setBackgroundColor(SNAPSHOT_BG).setPadding(pad).setBorder(new SolidBorder(new DeviceRgb(200,195,240), 0.5f));
-        table.addCell(cell);
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -682,24 +748,24 @@ private float p2SigH(int n)    { return n >= 8 ? 30f : n >= 6 ? 36f : 44f; }
     //  SIGNATURES — dynamic height based on subject count
     // ══════════════════════════════════════════════════════════════
     private void buildSignatures(Document doc, PdfFont bold, PdfFont regular, int sTotal) {
-    float spacerPt = p2SigH(sTotal) >= 44f ? 14f : p2SigH(sTotal) >= 36f ? 10f : 6f;
-    Table t = new Table(UnitValue.createPercentArray(new float[]{38, 38, 24}))
-            .setWidth(UnitValue.createPercentValue(100)).setMarginTop(8)
-            .setKeepTogether(true);
-    String[][] sigs = {
-        {"HEAD TEACHER'S SIGNATURE:", "________________________________"},
-        {"CLASS TEACHER'S SIGNATURE:", "____________________________"},
-        {"DATE:", "____________________"}
-    };
-    for (String[] sig : sigs) {
-        t.addCell(new Cell()
-            .add(new Paragraph(sig[0]).setFont(bold).setFontSize(7.5f))
-            .add(new Paragraph(" ").setFontSize(spacerPt))
-            .add(new Paragraph(sig[1]).setFont(regular).setFontSize(10))
-            .setBorder(Border.NO_BORDER)
-            .setPaddingRight(10).setPaddingBottom(2));
-    }
-    doc.add(t);
+        float spacerPt = p2SigH(sTotal) >= 44f ? 14f : p2SigH(sTotal) >= 36f ? 10f : 6f;
+        Table t = new Table(UnitValue.createPercentArray(new float[]{38, 38, 24}))
+                .setWidth(UnitValue.createPercentValue(100)).setMarginTop(8)
+                .setKeepTogether(true);
+        String[][] sigs = {
+            {"HEAD TEACHER'S SIGNATURE:", "________________________________"},
+            {"CLASS TEACHER'S SIGNATURE:", "____________________________"},
+            {"DATE:", "____________________"}
+        };
+        for (String[] sig : sigs) {
+            t.addCell(new Cell()
+                .add(new Paragraph(sig[0]).setFont(bold).setFontSize(7.5f))
+                .add(new Paragraph(" ").setFontSize(spacerPt))
+                .add(new Paragraph(sig[1]).setFont(regular).setFontSize(10))
+                .setBorder(Border.NO_BORDER)
+                .setPaddingRight(10).setPaddingBottom(2));
+        }
+        doc.add(t);
     }
 
     private void buildDates(Document doc, PdfFont regular) {
@@ -739,6 +805,7 @@ private float p2SigH(int n)    { return n >= 8 ? 30f : n >= 6 ? 36f : 44f; }
         List<ClassRoom> classes = classRoomRepository.findByAcademicYear(academicYear);
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         PdfDocument pdf = new PdfDocument(new PdfWriter(baos));
+        addWatermarkHandler(pdf, loadLogoBytes());
         pdf.setDefaultPageSize(com.itextpdf.kernel.geom.PageSize.A4.rotate());
         Document doc = new Document(pdf); doc.setMargins(30,30,30,30);
         PdfFont bold    = PdfFontFactory.createFont(com.itextpdf.io.font.constants.StandardFonts.HELVETICA_BOLD);
