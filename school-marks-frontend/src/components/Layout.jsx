@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { isAdminLike, isSuperAdmin } from '../utils/roles';
 
 /* ─── nav definitions ─── */
 const adminLinks = [
@@ -9,7 +10,6 @@ const adminLinks = [
   { to: '/admin/teachers',    icon: '👩‍🏫', label: 'Teachers'            },
   { to: '/admin/students',    icon: '👨‍🎓', label: 'Students'            },
   { to: '/admin/classes',     icon: '🏫', label: 'Classes'              },
-  { to: '/admin/subjects',    icon: '📖', label: 'Subjects'             },
   { to: '/admin/exams',       icon: '📝', label: 'Exams'                },
   { to: '/admin/assignments', icon: '🔗', label: 'Assignments'          },
   { to: '/admin/reports',     icon: '📄', label: 'Reports'              },
@@ -19,8 +19,10 @@ const teacherLinks = [
   { to: '/teacher',           icon: '📊', label: 'Dashboard',   end: true },
   { to: '/teacher/marks',     icon: '✏️', label: 'Enter Marks'           },
   { to: '/teacher/analytics', icon: '📈', label: 'My Analytics'         },
-  { to: '/teacher/reports',   icon: '📄', label: 'Reports'              },
 ];
+
+// Shown at the top of the admin menu for the superadmin only
+const controlRoomLink = { to: '/superadmin', icon: '🛰️', label: 'Control Room', end: true };
 
 /* ─── sidebar widths ─── */
 const SIDEBAR_FULL = 240;
@@ -95,7 +97,9 @@ export default function Layout({ children }) {
   const { tokens, isDark, toggleTheme } = useTheme();
   const navigate                = useNavigate();
   const location                = useLocation();
-  const links                   = user?.role === 'ADMIN' ? adminLinks : teacherLinks;
+  const links                   = isSuperAdmin(user) ? [controlRoomLink, ...adminLinks]
+                                : isAdminLike(user)  ? adminLinks
+                                : teacherLinks;
 
   /* ─── sidebar state ─── */
   const [collapsed, setCollapsed] = useState(() => {
@@ -137,8 +141,8 @@ export default function Layout({ children }) {
     return () => document.removeEventListener('mousedown', handler);
   }, [mobileOpen]);
 
-  const handleLogout = useCallback(() => {
-    logout();
+  const handleLogout = useCallback(async () => {
+    await logout('manual');
     navigate('/login');
   }, [logout, navigate]);
 

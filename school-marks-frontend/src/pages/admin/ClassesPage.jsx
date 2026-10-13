@@ -4,9 +4,18 @@ import api from '../../api/client';
 import { usePageStyles } from '../../styles/pageStyles';
 import toast from 'react-hot-toast';
 
-const GRADES = [-1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+// -2 = Playgroup, -1 = PP1, 0 = PP2, 1–9 = Grade 1–9 (matches ClassRoom.gradeLevel)
+const GRADES = [-2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
 const LEVEL  = g => g < 1 ? 'pre_primary' : g <= 3 ? 'lower_primary' : g <= 6 ? 'upper_primary' : 'junior_secondary';
-const LABEL  = g => g === -1 ? 'PP1 (Pre-Primary 1)' : g === 0 ? 'PP2 (Pre-Primary 2)' : g <= 6 ? `Grade ${g} (Primary)` : `Grade ${g} (JSS)`;
+const LABEL  = g =>
+  g === -2 ? 'Playgroup' :
+  g === -1 ? 'PP1 (Pre-Primary 1)' :
+  g === 0  ? 'PP2 (Pre-Primary 2)' :
+  g <= 6   ? `Grade ${g} (Primary)` :
+             `Grade ${g} (JSS)`;
+// Display order: Playgroup → PP1 → PP2 → Grade 1…9, then by year
+const byGrade = (a, b) => a.gradeLevel - b.gradeLevel || String(b.academicYear).localeCompare(String(a.academicYear));
+const LEVEL_TEXT = { pre_primary: 'Pre-Primary', lower_primary: 'Lower Primary', upper_primary: 'Upper Primary', junior_secondary: 'Junior Secondary' };
 
 export default function ClassesPage() {
   const s = usePageStyles();
@@ -21,7 +30,7 @@ export default function ClassesPage() {
 
   const load = () => {
     setPageLoading(true);
-    getClasses().then(r => setClasses(r.data))
+    getClasses().then(r => setClasses([...r.data].sort(byGrade)))
       .catch(() => toast.error('Failed to load classes'))
       .finally(() => setPageLoading(false));
   };
@@ -44,7 +53,7 @@ export default function ClassesPage() {
     try {
       await api.put(`/admin/classes/${editModal.classId}`, { academicYear: editModal.academicYear });
       toast.success('Class updated'); setEditModal(null); load();
-    } catch { toast.error('Failed to update class'); }
+    } catch (err) { toast.error(err.response?.data?.message || 'Failed to update class'); }
     finally { setEditLoading(false); }
   };
 
@@ -125,7 +134,7 @@ export default function ClassesPage() {
           <div style={s.tableWrap}>
             <table style={{ ...s.table, minWidth: 550 }}>
               <thead>
-                <tr>{['ID','Grade','Level','Academic Year','Actions'].map(h =>
+                <tr>{['Class','Level','Academic Year','Actions'].map(h =>
                   <th key={h} style={s.th}>{h}</th>)}
                 </tr>
               </thead>
@@ -134,10 +143,9 @@ export default function ClassesPage() {
                   const bc = badgeColor(c.levelType);
                   return (
                     <tr key={c.classId} style={s.rowBg(i)}>
-                      <td style={s.td}>{c.classId}</td>
                       <td style={s.td}>{LABEL(c.gradeLevel)}</td>
                       <td style={s.td}>
-                        <span style={{ ...s.badge, background: bc.bg, color: bc.color }}>{c.levelType}</span>
+                        <span style={{ ...s.badge, background: bc.bg, color: bc.color }}>{LEVEL_TEXT[c.levelType] || c.levelType}</span>
                       </td>
                       <td style={s.td}>{c.academicYear}</td>
                       <td style={s.td}>

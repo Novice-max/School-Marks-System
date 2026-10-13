@@ -51,9 +51,9 @@ export default function TeachersPage() {
     setResetting(teacher.teacherId);
     try {
       const { data } = await api.post(`/admin/teachers/${teacher.teacherId}/reset-password`);
-      setShowCreds({ username: data.tempPassword.replace('123', ''), password: data.tempPassword, isReset: true, name: teacher.firstName });
+      setShowCreds({ username: data.username, password: data.tempPassword, isReset: true, name: teacher.firstName });
       toast.success('Password reset');
-    } catch { toast.error('Failed to reset password'); }
+    } catch (err) { toast.error(err.response?.data?.message || 'Failed to reset password'); }
     finally { setResetting(null); }
   };
 
@@ -116,7 +116,9 @@ export default function TeachersPage() {
               <Avatar name={`${panelTeacher.firstName} ${panelTeacher.lastName}`} size={56} />
               <div>
                 <div style={{ fontSize: 18, fontWeight: 700, color: t.text }}>{panelTeacher.firstName} {panelTeacher.lastName}</div>
-                <div style={{ fontSize: 13, color: t.textFaint }}>ID: {panelTeacher.teacherId}</div>
+                {panelTeacher.username && (
+                  <div style={{ fontSize: 13, color: t.textFaint }}>@{panelTeacher.username}</div>
+                )}
                 <span style={{ ...s.badge, marginTop: 4, display: 'inline-block', ...(panelTeacher.isActive ? s.statusActive : s.statusInactive) }}>
                   {panelTeacher.isActive ? 'Active' : 'Inactive'}
                 </span>
@@ -201,7 +203,7 @@ export default function TeachersPage() {
                         <Avatar name={`${tc.firstName} ${tc.lastName}`} size={34} />
                         <div>
                           <div style={{ fontWeight: 600, color: t.text, whiteSpace: 'nowrap' }}>{tc.firstName} {tc.lastName}</div>
-                          <div style={{ fontSize: 11, color: t.textFaint }}>ID: {tc.teacherId}</div>
+                          {tc.username && <div style={{ fontSize: 11, color: t.textFaint }}>@{tc.username}</div>}
                         </div>
                       </div>
                     </td>

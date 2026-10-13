@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { login } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { homeFor } from '../utils/roles';
 import toast from 'react-hot-toast';
 
 export default function LoginPage() {
@@ -31,7 +32,7 @@ export default function LoginPage() {
       if (data.firstLogin) {
         navigate('/change-password');
       } else {
-        navigate(data.role === 'ADMIN' ? '/admin' : '/teacher');
+        navigate(homeFor(data.role));
       }
     } catch (err) {
       if (err.response?.status === 429) {

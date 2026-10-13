@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { changePassword } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { homeFor } from '../utils/roles';
 import toast from 'react-hot-toast';
 
 export default function ChangePasswordPage() {
@@ -27,7 +28,7 @@ export default function ChangePasswordPage() {
       await changePassword({ currentPassword: current, newPassword: newPass });
       toast.success('Password changed!');
       clearFirstLogin();
-      navigate(user.role === 'ADMIN' ? '/admin' : '/teacher');
+      navigate(homeFor(user.role));
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed');
     } finally {

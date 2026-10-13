@@ -3,8 +3,11 @@ import { Toaster } from 'react-hot-toast';
 import { useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { homeFor } from './utils/roles';
 import ErrorBoundary from './components/ErrorBoundary';
 import Layout from './components/Layout';
+import SessionWarning from './components/SessionWarning';
+import SuperLayout from './components/SuperLayout';
 import TeacherDashboard     from './pages/teacher/TeacherDashboard';
 import LoginPage            from './pages/LoginPage';
 import ChangePasswordPage   from './pages/ChangePasswordPage';
@@ -17,14 +20,27 @@ import AssignmentsPage      from './pages/admin/AssignmentsPage';
 import ReportsPage          from './pages/ReportsPage';
 import MarkEntryPage        from './pages/teacher/MarkEntryPage';
 import TeacherAnalyticsPage from './pages/teacher/TeacherAnalyticsPage';
-import SubjectsPage         from './pages/admin/SubjectsPage';
 import SettingsPage         from './pages/SettingsPage';
+import ControlRoom          from './pages/superadmin/ControlRoom';
+import ActivityLog          from './pages/superadmin/ActivityLog';
+import AdminsPage           from './pages/superadmin/AdminsPage';
+import SubjectsManager      from './pages/superadmin/SubjectsManager';
 
-function PrivateRoute({ children, role }) {
+const ADMIN_ROLES   = ['ADMIN', 'SUPERADMIN'];   // superadmin can do everything an admin can
+const TEACHER_ROLES = ['TEACHER'];
+const SUPER_ROLES   = ['SUPERADMIN'];
+const ANY_ROLE      = ['TEACHER', 'ADMIN', 'SUPERADMIN'];
+
+/**
+ * roles: who may open this page. Anyone else is sent to their own home.
+ * shell: which layout wraps it ('school' = sidebar layout, 'super' = Control Room).
+ */
+function PrivateRoute({ children, roles = ANY_ROLE, shell = 'school' }) {
   const { user } = useAuth();
   if (!user) return <Navigate to="/login" replace />;
-  if (role && user.role !== role) return <Navigate to="/login" replace />;
-  return <Layout>{children}</Layout>;
+  if (user.isFirstLogin) return <Navigate to="/change-password" replace />;
+  if (!roles.includes(user.role)) return <Navigate to={homeFor(user.role)} replace />;
+  return shell === 'super' ? <SuperLayout>{children}</SuperLayout> : <Layout>{children}</Layout>;
 }
 
 function AppRoutes() {
@@ -41,26 +57,35 @@ function AppRoutes() {
 
   return (
     <Routes>
-      <Route path="/login" element={user ? <Navigate to={user.role === 'ADMIN' ? '/admin' : '/teacher'} /> : <LoginPage />} />
-      <Route path="/change-password" element={<ChangePasswordPage />} />
+      <Route path="/login" element={user ? <Navigate to={homeFor(user.role)} replace /> : <LoginPage />} />
+      <Route path="/change-password" element={user ? <ChangePasswordPage /> : <Navigate to="/login" replace />} />
 
-      <Route path="/admin"             element={<PrivateRoute role="ADMIN"><AdminDashboard /></PrivateRoute>} />
-      <Route path="/admin/teachers"    element={<PrivateRoute role="ADMIN"><TeachersPage /></PrivateRoute>} />
-      <Route path="/admin/students"    element={<PrivateRoute role="ADMIN"><StudentsPage /></PrivateRoute>} />
-      <Route path="/admin/classes"     element={<PrivateRoute role="ADMIN"><ClassesPage /></PrivateRoute>} />
-      <Route path="/admin/subjects"    element={<PrivateRoute role="ADMIN"><SubjectsPage /></PrivateRoute>} />
-      <Route path="/admin/exams"       element={<PrivateRoute role="ADMIN"><ExamsPage /></PrivateRoute>} />
-      <Route path="/admin/assignments" element={<PrivateRoute role="ADMIN"><AssignmentsPage /></PrivateRoute>} />
-      <Route path="/admin/reports"     element={<PrivateRoute role="ADMIN"><ReportsPage /></PrivateRoute>} />
+      {/* ── Control Room (superadmin only, own layout) ── */}
+      <Route path="/superadmin"          element={<PrivateRoute roles={SUPER_ROLES} shell="super"><ControlRoom /></PrivateRoute>} />
+      <Route path="/superadmin/activity" element={<PrivateRoute roles={SUPER_ROLES} shell="super"><ActivityLog /></PrivateRoute>} />
+      <Route path="/superadmin/admins"   element={<PrivateRoute roles={SUPER_ROLES} shell="super"><AdminsPage /></PrivateRoute>} />
+      <Route path="/superadmin/subjects" element={<PrivateRoute roles={SUPER_ROLES} shell="super"><SubjectsManager /></PrivateRoute>} />
 
-      <Route path="/teacher"           element={<PrivateRoute><TeacherDashboard /></PrivateRoute>} />
-      <Route path="/teacher/marks"     element={<PrivateRoute><MarkEntryPage /></PrivateRoute>} />
-      <Route path="/teacher/analytics" element={<PrivateRoute><TeacherAnalyticsPage /></PrivateRoute>} />
-      <Route path="/teacher/reports"   element={<PrivateRoute><ReportsPage /></PrivateRoute>} />
+      {/* ── School admin ── */}
+      <Route path="/admin"             element={<PrivateRoute roles={ADMIN_ROLES}><AdminDashboard /></PrivateRoute>} />
+      <Route path="/admin/teachers"    element={<PrivateRoute roles={ADMIN_ROLES}><TeachersPage /></PrivateRoute>} />
+      <Route path="/admin/students"    element={<PrivateRoute roles={ADMIN_ROLES}><StudentsPage /></PrivateRoute>} />
+      <Route path="/admin/classes"     element={<PrivateRoute roles={ADMIN_ROLES}><ClassesPage /></PrivateRoute>} />
+      <Route path="/admin/exams"       element={<PrivateRoute roles={ADMIN_ROLES}><ExamsPage /></PrivateRoute>} />
+      <Route path="/admin/assignments" element={<PrivateRoute roles={ADMIN_ROLES}><AssignmentsPage /></PrivateRoute>} />
+      <Route path="/admin/reports"     element={<PrivateRoute roles={ADMIN_ROLES}><ReportsPage /></PrivateRoute>} />
+      {/* Old bookmark → subjects now live in the Control Room */}
+      <Route path="/admin/subjects"    element={<Navigate to={user?.role === 'SUPERADMIN' ? '/superadmin/subjects' : '/admin'} replace />} />
+
+      {/* ── Teacher (no Reports page — downloads are admin-only) ── */}
+      <Route path="/teacher"           element={<PrivateRoute roles={TEACHER_ROLES}><TeacherDashboard /></PrivateRoute>} />
+      <Route path="/teacher/marks"     element={<PrivateRoute roles={TEACHER_ROLES}><MarkEntryPage /></PrivateRoute>} />
+      <Route path="/teacher/analytics" element={<PrivateRoute roles={TEACHER_ROLES}><TeacherAnalyticsPage /></PrivateRoute>} />
+      <Route path="/teacher/reports"   element={<Navigate to="/teacher" replace />} />
 
       <Route path="/settings" element={<PrivateRoute><SettingsPage /></PrivateRoute>} />
 
-      <Route path="*" element={<Navigate to="/login" replace />} />
+      <Route path="*" element={<Navigate to={user ? homeFor(user.role) : '/login'} replace />} />
     </Routes>
   );
 }
@@ -72,6 +97,7 @@ export default function App() {
         <ThemeProvider>
           <BrowserRouter>
             <Toaster position="top-right" />
+            <SessionWarning />
             <AppRoutes />
           </BrowserRouter>
         </ThemeProvider>

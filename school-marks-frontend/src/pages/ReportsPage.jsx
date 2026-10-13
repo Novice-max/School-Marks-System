@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getClasses, downloadMarklist, downloadTermReport } from '../api/client';
 import api from '../api/client';
-import { useAuth } from '../context/AuthContext';
 import { usePageStyles } from '../styles/pageStyles';
 import toast from 'react-hot-toast';
 
@@ -37,10 +36,8 @@ function LoadingDots() {
 }
 
 export default function ReportsPage() {
-  const { user } = useAuth();
   const s = usePageStyles();
   const t = s.tokens;
-  const isAdmin = user?.role === 'ADMIN';
 
   const [classes,     setClasses]     = useState([]);
   const [exams,       setExams]       = useState([]);
@@ -59,38 +56,25 @@ export default function ReportsPage() {
   const [schoolTerm,  setSchoolTerm]  = useState('1');
   const [schoolExam,  setSchoolExam]  = useState('Opener');
 
+  // Admin-only page (teachers no longer have Reports; the API enforces it too)
   useEffect(() => {
-    if (isAdmin) {
-      getClasses().then(r => setClasses(r.data));
-    } else {
-      api.get('/teacher/assignments').then(r => {
-        const seen = new Set();
-        const uniqueClasses = [];
-        r.data.forEach(a => {
-          if (!seen.has(a.classRoom.classId)) {
-            seen.add(a.classRoom.classId);
-            uniqueClasses.push(a.classRoom);
-          }
-        });
-        setClasses(uniqueClasses);
-      });
-    }
-  }, [isAdmin]);
+    getClasses()
+      .then(r => setClasses(r.data))
+      .catch(() => toast.error('Failed to load classes'));
+  }, []);
 
   useEffect(() => {
     if (!listClass) { setExams([]); return; }
-    const endpoint = isAdmin ? `/admin/exams` : `/teacher/exams/class/${listClass}`;
-    api.get(endpoint).then(r => {
-      const filtered = isAdmin ? r.data.filter(e => e.classRoom?.classId == listClass) : r.data;
+    api.get('/admin/exams').then(r => {
+      const filtered = r.data.filter(e => e.classRoom?.classId == listClass);
       setExams(filtered);
     });
-  }, [listClass, isAdmin]);
+  }, [listClass]);
 
   useEffect(() => {
     if (!cardClass) { setStudents([]); return; }
-    const endpoint = isAdmin ? `/admin/students/class/${cardClass}` : `/teacher/students/class/${cardClass}`;
-    api.get(endpoint).then(r => setStudents(r.data));
-  }, [cardClass, isAdmin]);
+    api.get(`/admin/students/class/${cardClass}`).then(r => setStudents(r.data));
+  }, [cardClass]);
 
   const dlMarklist = async () => {
     if (!listExam) { toast.error('Select an exam'); return; }
@@ -335,44 +319,42 @@ export default function ReportsPage() {
           </p>
         </div>
 
-        {/* ── SCHOOL-WIDE REPORT (admin only) ── */}
-        {isAdmin && (
-          <div style={{ ...rc.card, borderTop: `4px solid ${t.accent}` }}>
-            <div style={rc.cardIcon}>🏫</div>
-            <h3 style={s.cardTitle}>School-Wide Report</h3>
-            <p style={rc.cardDesc}>
-              Complete report for all classes (PP1–Grade 9) for a given exam period
-            </p>
+        {/* ── SCHOOL-WIDE REPORT ── */}
+        <div style={{ ...rc.card, borderTop: `4px solid ${t.accent}` }}>
+          <div style={rc.cardIcon}>🏫</div>
+          <h3 style={s.cardTitle}>School-Wide Report</h3>
+          <p style={rc.cardDesc}>
+            Complete report for all classes (PP1–Grade 9) for a given exam period
+          </p>
 
-            <label style={rc.label}>Academic Year</label>
-            <input style={rc.select} type="text" value={schoolYear}
-              onChange={e => setSchoolYear(e.target.value)}
-              placeholder="e.g. 2026" disabled={busy} />
+          <label style={rc.label}>Academic Year</label>
+          <input style={rc.select} type="text" value={schoolYear}
+            onChange={e => setSchoolYear(e.target.value)}
+            placeholder="e.g. 2026" disabled={busy} />
 
-            <label style={rc.label}>Term</label>
-            <select style={rc.select} value={schoolTerm}
-              onChange={e => setSchoolTerm(e.target.value)}
-              disabled={busy}>
-              <option value="1">Term 1</option>
-              <option value="2">Term 2</option>
-              <option value="3">Term 3</option>
-            </select>
+          <label style={rc.label}>Term</label>
+          <select style={rc.select} value={schoolTerm}
+            onChange={e => setSchoolTerm(e.target.value)}
+            disabled={busy}>
+            <option value="1">Term 1</option>
+            <option value="2">Term 2</option>
+            <option value="3">Term 3</option>
+          </select>
 
-            <label style={rc.label}>Exam</label>
-            <select style={rc.select} value={schoolExam}
-              onChange={e => setSchoolExam(e.target.value)}
-              disabled={busy}>
-              <option>Opener</option>
-              <option>Mid-Term</option>
-              <option>End-Term</option>
-            </select>
+          <label style={rc.label}>Exam</label>
+          <select style={rc.select} value={schoolExam}
+            onChange={e => setSchoolExam(e.target.value)}
+            disabled={busy}>
+            <option>Opener</option>
+            <option>Mid-Term</option>
+            <option>End-Term</option>
+          </select>
 
-            <button style={btnStyle({ ...rc.btn, background: t.accent }, 'school')}
-              onClick={dlSchoolReport} disabled={busy}>
-              {btnContent('school', '⬇️ Download School Report')}
-            </button>
-          </div>
-        )}
+          <button style={btnStyle({ ...rc.btn, background: t.accent }, 'school')}
+            onClick={dlSchoolReport} disabled={busy}>
+            {btnContent('school', '⬇️ Download School Report')}
+          </button>
+        </div>
 
       </div>
     </div>
