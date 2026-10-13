@@ -975,7 +975,7 @@ public class ReportService {
     private float headerFont(int n) { return n<=7?10f:9f; }
 
     // ── Grade helpers ──
-    private String getGrade(double score) {
+    private String getGrade(double score) {//Calc marks
         return markService.calculateCbcGrade(java.math.BigDecimal.valueOf(score));
     }
     private DeviceRgb getGradeColor(String g) {
