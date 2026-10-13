@@ -31,4 +31,11 @@ public interface MarkRepository extends JpaRepository<Mark, Long> {
     @Modifying
     @Transactional
     void deleteByExam_ExamId(Long examId);
+
+    long countByExam_ExamId(Long examId);
+
+    long countBySubject_SubjectId(Long subjectId);
+
+    @Query("SELECT m.subject.subjectId, COUNT(m) FROM Mark m GROUP BY m.subject.subjectId")
+    List<Object[]> countPerSubject();
 }

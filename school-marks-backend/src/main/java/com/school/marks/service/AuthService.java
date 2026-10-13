@@ -18,19 +18,22 @@ import java.util.List;
 @Service
 public class AuthService implements UserDetailsService {
 
-    private UserRepository userRepository;
-    private PasswordEncoder passwordEncoder;
-    private JwtUtil jwtUtil;
-    private AuthenticationManager authenticationManager;
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final JwtUtil jwtUtil;
+    private final AuthenticationManager authenticationManager;
+    private final AuditService auditService;
 
     public AuthService(UserRepository userRepository,
                        PasswordEncoder passwordEncoder,
                        JwtUtil jwtUtil,
-                       @Lazy AuthenticationManager authenticationManager) {
+                       @Lazy AuthenticationManager authenticationManager,
+                       AuditService auditService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtUtil = jwtUtil;
         this.authenticationManager = authenticationManager;
+        this.auditService = auditService;
     }
 
     @Override
@@ -64,17 +67,27 @@ public class AuthService implements UserDetailsService {
         UserDetails userDetails = loadUserByUsername(request.getUsername());
         String token = jwtUtil.generateToken(userDetails, user.getRole().name());
 
-        String fullName = user.getTeacher() != null
-                ? user.getTeacher().getFullName()
-                : "Administrator";
+        auditService.recordFor(user, AuditService.AUTH, "LOGIN", "Signed in");
 
         return LoginResponse.builder()
                 .token(token)
                 .role(user.getRole().name())
                 .username(user.getUsername())
-                .fullName(fullName)
+                .fullName(user.getDisplayName())
                 .isFirstLogin(user.getIsFirstLogin())
                 .build();
+    }
+
+    /**
+     * Issue a fresh token for an active user. Returns null when the session has
+     * hit its absolute lifetime (forces a real login).
+     */
+    @Transactional(readOnly = true)
+    public String refresh(String username, String currentToken) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new UsernameNotFoundException("User not found"));
+        if (!user.getIsActive()) throw new DisabledException("Account is deactivated");
+        return jwtUtil.refreshToken(currentToken, user.getRole().name());
     }
 
     @Transactional
@@ -89,6 +102,8 @@ public class AuthService implements UserDetailsService {
         user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
         user.setIsFirstLogin(false);
         userRepository.save(user);
+
+        auditService.recordFor(user, AuditService.AUTH, "PASSWORD_CHANGE", "Changed own password");
     }
 
     @Transactional

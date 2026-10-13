@@ -1,6 +1,7 @@
 package com.school.marks.controller;
 import com.school.marks.model.*;
 import com.school.marks.repository.*;
+import com.school.marks.service.AuditService;
 import com.school.marks.service.AuthService;
 import com.school.marks.service.MarkService;
 import lombok.RequiredArgsConstructor;
@@ -27,34 +28,44 @@ public class AdminController {
     private final MarkService markService;
     private final PasswordEncoder passwordEncoder;
     private final UserRepository userRepository;
+    private final AuditService audit;
 
     // ── Teachers ──
     @GetMapping("/teachers")
     public ResponseEntity<List<Teacher>> getAllTeachers() { return ResponseEntity.ok(teacherRepository.findAll()); }
 
     @PostMapping("/teachers")
+    @Transactional // teacher + login account are created together or not at all
     public ResponseEntity<Map<String, String>> createTeacher(@RequestBody Map<String, String> body) {
         Teacher teacher = Teacher.builder()
                 .firstName(body.get("firstName")).lastName(body.get("lastName"))
                 .email(body.get("email")).phone(body.get("phone")).build();
         Teacher saved = teacherRepository.save(teacher);
         String username = body.get("username");
-        authService.createTeacherUser(username, saved);
+        User user = authService.createTeacherUser(username, saved);
+        audit.record(AuditService.TEACHERS, "CREATE", "teachers", saved.getTeacherId(),
+                "Created teacher " + saved.getFullName() + " (login: " + user.getUsername() + ")");
         return ResponseEntity.ok(Map.of("message","Teacher created","defaultPassword",username+"123","username",username));
     }
 
     @PutMapping("/teachers/{teacherId}")
+    @Transactional
     public ResponseEntity<Teacher> updateTeacher(@PathVariable Long teacherId, @RequestBody Map<String, String> body) {
         Teacher teacher = teacherRepository.findById(teacherId)
             .orElseThrow(() -> new RuntimeException("Teacher not found"));
+        String before = teacherSnapshot(teacher);
         if (body.containsKey("firstName") && !body.get("firstName").isBlank()) teacher.setFirstName(body.get("firstName"));
         if (body.containsKey("lastName")  && !body.get("lastName").isBlank())  teacher.setLastName(body.get("lastName"));
         if (body.containsKey("email"))    teacher.setEmail(body.get("email"));
         if (body.containsKey("phone"))    teacher.setPhone(body.get("phone"));
-        return ResponseEntity.ok(teacherRepository.save(teacher));
+        Teacher saved = teacherRepository.save(teacher);
+        audit.record(AuditService.TEACHERS, "UPDATE", "teachers", teacherId,
+                "Edited teacher " + saved.getFullName(), before, teacherSnapshot(saved));
+        return ResponseEntity.ok(saved);
     }
 
     @PostMapping("/teachers/{teacherId}/reset-password")
+    @Transactional
     public ResponseEntity<Map<String, String>> resetTeacherPassword(@PathVariable Long teacherId) {
         Teacher teacher = teacherRepository.findById(teacherId)
             .orElseThrow(() -> new RuntimeException("Teacher not found"));
@@ -64,24 +75,35 @@ public class AdminController {
         user.setPasswordHash(passwordEncoder.encode(newPassword));
         user.setIsFirstLogin(true);
         userRepository.save(user);
-        return ResponseEntity.ok(Map.of("message", "Password reset successfully", "tempPassword", newPassword));
+        audit.record(AuditService.TEACHERS, "RESET_PASSWORD", "users", user.getUserId(),
+                "Reset password for " + teacher.getFullName() + " (login: " + user.getUsername() + ")");
+        return ResponseEntity.ok(Map.of(
+                "message", "Password reset successfully",
+                "tempPassword", newPassword,
+                "username", user.getUsername()));
     }
 
     @PostMapping("/teachers/{teacherId}/deactivate")
+    @Transactional
     public ResponseEntity<String> deactivateTeacher(@PathVariable Long teacherId) {
         User user = userRepository.findByTeacher_TeacherId(teacherId)
                 .orElseThrow(() -> new RuntimeException("User account not found"));
         user.setIsActive(false);
         userRepository.save(user);
+        audit.record(AuditService.TEACHERS, "DEACTIVATE", "users", user.getUserId(),
+                "Deactivated teacher " + user.getDisplayName());
         return ResponseEntity.ok("Teacher deactivated");
     }
 
     @PostMapping("/teachers/{teacherId}/activate")
+    @Transactional
     public ResponseEntity<String> activateTeacher(@PathVariable Long teacherId) {
         User user = userRepository.findByTeacher_TeacherId(teacherId)
                 .orElseThrow(() -> new RuntimeException("User account not found"));
         user.setIsActive(true);
         userRepository.save(user);
+        audit.record(AuditService.TEACHERS, "ACTIVATE", "users", user.getUserId(),
+                "Reactivated teacher " + user.getDisplayName());
         return ResponseEntity.ok("Teacher activated");
     }
 
@@ -96,7 +118,10 @@ public class AdminController {
             map.put("email", t.getEmail());
             map.put("phone", t.getPhone());
             userRepository.findByTeacher_TeacherId(t.getTeacherId())
-                .ifPresent(u -> map.put("isActive", u.getIsActive()));
+                .ifPresent(u -> {
+                    map.put("isActive", u.getIsActive());
+                    map.put("username", u.getUsername());
+                });
             if (!map.containsKey("isActive")) map.put("isActive", true);
             return map;
         }).collect(java.util.stream.Collectors.toList());
@@ -108,15 +133,26 @@ public class AdminController {
     public ResponseEntity<List<ClassRoom>> getAllClasses() { return ResponseEntity.ok(classRoomRepository.findAll()); }
 
     @PostMapping("/classes")
-    public ResponseEntity<ClassRoom> createClass(@RequestBody ClassRoom classRoom) { return ResponseEntity.ok(classRoomRepository.save(classRoom)); }
+    @Transactional
+    public ResponseEntity<ClassRoom> createClass(@RequestBody ClassRoom classRoom) {
+        ClassRoom saved = classRoomRepository.save(classRoom);
+        audit.record(AuditService.CLASSES, "CREATE", "classes", saved.getClassId(),
+                "Created class " + saved.getDisplayName() + " — " + saved.getAcademicYear());
+        return ResponseEntity.ok(saved);
+    }
 
     @PutMapping("/classes/{classId}")
+    @Transactional
     public ResponseEntity<ClassRoom> updateClass(@PathVariable Long classId, @RequestBody Map<String, String> body) {
         ClassRoom classRoom = classRoomRepository.findById(classId)
             .orElseThrow(() -> new RuntimeException("Class not found"));
+        String before = classRoom.getAcademicYear();
         if (body.containsKey("academicYear") && !body.get("academicYear").isBlank())
             classRoom.setAcademicYear(body.get("academicYear"));
-        return ResponseEntity.ok(classRoomRepository.save(classRoom));
+        ClassRoom saved = classRoomRepository.save(classRoom);
+        audit.record(AuditService.CLASSES, "UPDATE", "classes", classId,
+                "Changed academic year of " + saved.getDisplayName(), before, saved.getAcademicYear());
+        return ResponseEntity.ok(saved);
     }
 
     // ── Students ──
@@ -132,6 +168,7 @@ public class AdminController {
     }
 
     @PostMapping("/students")
+    @Transactional
     public ResponseEntity<?> createStudent(@RequestBody Map<String, Object> body) {
         String admNo = (String) body.get("admissionNumber");
         if (studentRepository.existsByAdmissionNumber(admNo)) {
@@ -157,7 +194,10 @@ public class AdminController {
             student.setDateOfBirth(java.time.LocalDate.parse(body.get("dateOfBirth").toString()));
         }
 
-        return ResponseEntity.ok(studentRepository.save(student));
+        Student saved = studentRepository.save(student);
+        audit.record(AuditService.STUDENTS, "CREATE", "students", saved.getStudentId(),
+                "Added " + saved.getFullName() + " (" + saved.getAdmissionNumber() + ") to " + classRoom.getDisplayName());
+        return ResponseEntity.ok(saved);
     }
 
     @GetMapping("/students/class/{classId}")
@@ -201,41 +241,51 @@ public class AdminController {
     }
 
     @PutMapping("/students/{studentId}")
+    @Transactional
     public ResponseEntity<Student> updateStudent(@PathVariable Long studentId, @RequestBody Map<String, String> body) {
         Student student = studentRepository.findById(studentId)
             .orElseThrow(() -> new RuntimeException("Student not found"));
+        String before = studentSnapshot(student);
         if (body.containsKey("firstName")       && !body.get("firstName").isBlank())       student.setFirstName(body.get("firstName"));
         if (body.containsKey("lastName")        && !body.get("lastName").isBlank())        student.setLastName(body.get("lastName"));
         if (body.containsKey("admissionNumber") && !body.get("admissionNumber").isBlank()) student.setAdmissionNumber(body.get("admissionNumber"));
         if (body.containsKey("gender"))          student.setGender(body.get("gender"));
         if (body.containsKey("parentContact"))   student.setParentContact(body.get("parentContact"));
-        return ResponseEntity.ok(studentRepository.save(student));
+        Student saved = studentRepository.save(student);
+        audit.record(AuditService.STUDENTS, "UPDATE", "students", studentId,
+                "Edited student " + saved.getFullName(), before, studentSnapshot(saved));
+        return ResponseEntity.ok(saved);
     }
 
     @PostMapping("/students/{studentId}/deactivate")
+    @Transactional
     public ResponseEntity<String> deactivateStudent(@PathVariable Long studentId) {
         Student student = studentRepository.findById(studentId)
             .orElseThrow(() -> new RuntimeException("Student not found"));
         student.setIsActive(false);
         studentRepository.save(student);
+        audit.record(AuditService.STUDENTS, "DEACTIVATE", "students", studentId,
+                "Deactivated " + student.getFullName() + " (" + student.getAdmissionNumber() + ")");
         return ResponseEntity.ok("Student deactivated");
     }
 
     @PostMapping("/students/{studentId}/activate")
+    @Transactional
     public ResponseEntity<String> activateStudent(@PathVariable Long studentId) {
         Student student = studentRepository.findById(studentId)
             .orElseThrow(() -> new RuntimeException("Student not found"));
         student.setIsActive(true);
         studentRepository.save(student);
+        audit.record(AuditService.STUDENTS, "ACTIVATE", "students", studentId,
+                "Reactivated " + student.getFullName() + " (" + student.getAdmissionNumber() + ")");
         return ResponseEntity.ok("Student activated");
     }
 
-    // ── Subjects ──
+    // ── Subjects (read-only for admins — managed in /api/superadmin/subjects) ──
     @GetMapping("/subjects")
-    public ResponseEntity<List<Subject>> getAllSubjects() { return ResponseEntity.ok(subjectRepository.findAll()); }
-
-    @PostMapping("/subjects")
-    public ResponseEntity<Subject> createSubject(@RequestBody Subject subject) { return ResponseEntity.ok(subjectRepository.save(subject)); }
+    public ResponseEntity<List<Subject>> getAllSubjects() {
+        return ResponseEntity.ok(subjectRepository.findAllActive());
+    }
 
     // ── Exams ──
     @GetMapping("/exams")
@@ -245,6 +295,7 @@ public class AdminController {
     }
 
     @PostMapping("/exams")
+    @Transactional
     public ResponseEntity<Exam> createExam(@RequestBody Map<String, Object> body) {
         ClassRoom classRoom = classRoomRepository.findById(
             Long.valueOf(((Map<?,?>)body.get("classRoom")).get("classId").toString())
@@ -257,7 +308,11 @@ public class AdminController {
                 .classRoom(classRoom)
                 .build();
 
-        return ResponseEntity.ok(examRepository.save(exam));
+        Exam saved = examRepository.save(exam);
+        audit.record(AuditService.EXAMS, "CREATE", "exams", saved.getExamId(),
+                "Created " + saved.getExamName() + " T" + saved.getTerm() + " " + saved.getAcademicYear()
+                        + " for " + classRoom.getDisplayName());
+        return ResponseEntity.ok(saved);
     }
 
     @PostMapping("/exams/school")
@@ -280,6 +335,8 @@ public class AdminController {
             exam.setClassRoom(cr);
             created.add(examRepository.save(exam));
         }
+        audit.record(AuditService.EXAMS, "CREATE", "exams", null,
+                "Created " + examName + " T" + term + " " + academicYear + " for " + created.size() + " classes");
         return ResponseEntity.ok(Map.of("message", examName + " created for " + created.size() + " classes", "count", created.size()));
     }
 
@@ -291,13 +348,21 @@ public class AdminController {
             @PathVariable String academicYear) {
         List<Exam> exams = examRepository.findByExamNameAndTermAndAcademicYear(examName, term, academicYear);
         if (exams.isEmpty()) return ResponseEntity.notFound().build();
-        for (Exam exam : exams) markRepository.deleteByExam_ExamId(exam.getExamId());
+        long marksDeleted = 0;
+        for (Exam exam : exams) {
+            marksDeleted += markRepository.countByExam_ExamId(exam.getExamId());
+            markRepository.deleteByExam_ExamId(exam.getExamId());
+        }
         examRepository.deleteAll(exams);
+        audit.record(AuditService.EXAMS, "DELETE", "exams", null,
+                "Deleted " + examName + " T" + term + " " + academicYear + " for " + exams.size()
+                        + " classes — " + marksDeleted + " marks permanently removed");
         return ResponseEntity.ok(Map.of("message", examName + " deleted for " + exams.size() + " classes"));
     }
 
     // ── Assignments ──
     @PostMapping("/assign")
+    @Transactional
     public ResponseEntity<TeacherSubjectAssignment> assignTeacher(@RequestBody Map<String, Object> body) {
         Teacher teacher = teacherRepository.findById(
             Long.valueOf(((Map<?,?>)body.get("teacher")).get("teacherId").toString())
@@ -306,6 +371,10 @@ public class AdminController {
         Subject subject = subjectRepository.findById(
             Long.valueOf(((Map<?,?>)body.get("subject")).get("subjectId").toString())
         ).orElseThrow(() -> new RuntimeException("Subject not found"));
+
+        if (!subject.isActiveSubject()) {
+            throw new RuntimeException(subject.getSubjectName() + " has been archived and can't be assigned");
+        }
 
         ClassRoom classRoom = classRoomRepository.findById(
             Long.valueOf(((Map<?,?>)body.get("classRoom")).get("classId").toString())
@@ -319,7 +388,11 @@ public class AdminController {
                 .term(Integer.valueOf(body.get("term").toString()))
                 .build();
 
-        return ResponseEntity.ok(assignmentRepository.save(assignment));
+        TeacherSubjectAssignment saved = assignmentRepository.save(assignment);
+        audit.record(AuditService.ASSIGNMENTS, "CREATE", "teacher_subject_assignments", saved.getAssignmentId(),
+                "Assigned " + teacher.getFullName() + " → " + subject.getSubjectName() + " · "
+                        + classRoom.getDisplayName() + " · T" + saved.getTerm() + " " + saved.getAcademicYear());
+        return ResponseEntity.ok(saved);
     }
 
     @GetMapping("/assignments/teacher/{teacherId}")
@@ -328,8 +401,26 @@ public class AdminController {
     }
 
     @DeleteMapping("/assign/{assignmentId}")
+    @Transactional
     public ResponseEntity<String> removeAssignment(@PathVariable Long assignmentId) {
+        assignmentRepository.findById(assignmentId).ifPresent(a ->
+            audit.record(AuditService.ASSIGNMENTS, "DELETE", "teacher_subject_assignments", assignmentId,
+                    "Removed " + a.getTeacher().getFullName() + " from " + a.getSubject().getSubjectName() + " · "
+                            + a.getClassRoom().getDisplayName() + " · T" + a.getTerm() + " " + a.getAcademicYear()));
         assignmentRepository.deleteById(assignmentId);
         return ResponseEntity.ok("Assignment removed");
     }
+
+    // ── audit snapshots (no sensitive fields) ──
+
+    private static String teacherSnapshot(Teacher t) {
+        return "name=" + t.getFullName() + "; email=" + nz(t.getEmail()) + "; phone=" + nz(t.getPhone());
+    }
+
+    private static String studentSnapshot(Student s) {
+        return "name=" + s.getFullName() + "; adm=" + nz(s.getAdmissionNumber()) + "; gender=" + nz(s.getGender())
+                + "; parentContact=" + nz(s.getParentContact());
+    }
+
+    private static String nz(String v) { return v == null ? "" : v; }
 }

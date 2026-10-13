@@ -342,7 +342,7 @@ public class ReportService {
                 .map(bs -> new ExamSlot(bs.header, bs.allMarks.getOrDefault(studentId, Collections.emptyMap())))
                 .collect(Collectors.toList());
 
-        List<Subject> subjects = subjectRepository.findByLevelType(classRoom.getLevelType());
+        List<Subject> subjects = reportSubjects(classRoom.getLevelType(), batchSlots);
         int sTotal = subjects.size();
         float rh = rowHeight(sTotal), bf = bodyFont(sTotal), hf = headerFont(sTotal);
         int gl = classRoom.getGradeLevel();
@@ -454,11 +454,11 @@ public class ReportService {
         if (students.isEmpty()) throw new RuntimeException("No active students in this class");
         students.sort((a,b)->{ int c=a.getLastName().compareToIgnoreCase(b.getLastName()); return c!=0?c:a.getFirstName().compareToIgnoreCase(b.getFirstName()); });
 
-        List<Subject> subjects = subjectRepository.findByLevelType(classRoom.getLevelType());
-        int sTotal = subjects.size();
         List<Exam> allExams = examRepository.findByClassRoom_ClassIdAndTermAndAcademicYear(classId, term, academicYear);
         List<BatchExamSlot> bSlots = detectBatchExamSlots(allExams);
         if (bSlots.isEmpty()) throw new RuntimeException("No exams found for Term " + term + " " + academicYear);
+        List<Subject> subjects = reportSubjects(classRoom.getLevelType(), bSlots);
+        int sTotal = subjects.size();
 
         float cellPad = p2CellPad(sTotal);
         float barH    = p2BarH(sTotal);
@@ -987,6 +987,20 @@ public class ReportService {
         BigDecimal s = score.stripTrailingZeros();
         if (s.scale() < 0) s = s.setScale(0); // stripTrailingZeros turns 100 into 1E+2 internally
         return s.toPlainString();
+    }
+
+    /**
+     * Subjects shown on a term report: every active subject for the level, plus
+     * any archived subject that still has marks this term (so archiving a subject
+     * never silently drops marks from a report card).
+     */
+    private List<Subject> reportSubjects(String levelType, List<BatchExamSlot> slots) {
+        Set<String> withMarks = new HashSet<>();
+        for (BatchExamSlot bs : slots)
+            for (Map<String, BigDecimal> m : bs.allMarks.values()) withMarks.addAll(m.keySet());
+        return subjectRepository.findByLevelType(levelType).stream()
+                .filter(sub -> sub.isActiveSubject() || withMarks.contains(sub.getSubjectName()))
+                .collect(Collectors.toList());
     }
 
     // ── Sizing helpers ──

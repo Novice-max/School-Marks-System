@@ -37,6 +37,15 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Logged-in user tried something their role / assignments don't allow.
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<Map<String, String>> handleAccessDenied(AccessDeniedException ex) {
+        String message = ex.getMessage() != null ? ex.getMessage() : "You do not have permission to do that.";
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", message));
+    }
+
+    /**
      * Entity not found (e.g. student, teacher, class doesn't exist).
      */
     @ExceptionHandler(NoSuchElementException.class)

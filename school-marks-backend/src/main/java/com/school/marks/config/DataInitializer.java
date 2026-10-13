@@ -29,10 +29,13 @@ public class DataInitializer implements CommandLineRunner {
 
     // ─────────────────────────────────────────────
     // DEFAULT ADMIN  (login: admin / admin123)
-    // Change password immediately after first login
+    // Only on a brand-new database. Previously this re-created admin/admin123
+    // whenever no user was literally named "admin" — renaming the admin would
+    // have silently opened a backdoor on the next deploy.
     // ─────────────────────────────────────────────
     private void seedAdminAccount() {
         if (userRepository.existsByUsername("admin")) return;
+        if (userRepository.existsByRoleIn(List.of(User.Role.ADMIN, User.Role.SUPERADMIN))) return;
 
         User admin = User.builder()
                 .username("admin")

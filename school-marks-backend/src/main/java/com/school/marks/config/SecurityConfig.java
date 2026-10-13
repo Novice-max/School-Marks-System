@@ -2,6 +2,7 @@ package com.school.marks.config;
 
 import com.school.marks.security.JwtFilter;
 import com.school.marks.security.LoginRateLimitFilter;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
@@ -21,10 +22,24 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.config.Customizer;
 
+/**
+ * Role hierarchy (enforced explicitly, rule by rule):
+ *   SUPERADMIN ⊃ ADMIN ⊃ (teacher endpoints, for admin tooling)
+ *
+ *   /api/superadmin/**  SUPERADMIN only
+ *   /api/admin/**       ADMIN, SUPERADMIN
+ *   /api/reports/**     ADMIN, SUPERADMIN   (teachers can no longer download reports)
+ *   /api/teacher/**     TEACHER, ADMIN, SUPERADMIN — teacher reads are additionally
+ *                       ownership-checked in TeacherController
+ */
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
 public class SecurityConfig {
+
+    private static final String SUPERADMIN = "SUPERADMIN";
+    private static final String ADMIN      = "ADMIN";
+    private static final String TEACHER    = "TEACHER";
 
     private final JwtFilter jwtFilter;
     private final UserDetailsService userDetailsService;
@@ -44,10 +59,27 @@ public class SecurityConfig {
             .csrf(AbstractHttpConfigurer::disable)
             .cors(Customizer.withDefaults())
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/auth/**", "/actuator/health").permitAll()
-                .requestMatchers("/api/admin/**").hasAuthority("ADMIN")
-                .requestMatchers("/api/teacher/**").hasAnyAuthority("TEACHER", "ADMIN")
+                .requestMatchers("/api/auth/login", "/actuator/health").permitAll()
+                .requestMatchers("/api/superadmin/**").hasAuthority(SUPERADMIN)
+                .requestMatchers("/api/admin/**").hasAnyAuthority(ADMIN, SUPERADMIN)
+                .requestMatchers("/api/reports/**").hasAnyAuthority(ADMIN, SUPERADMIN)
+                .requestMatchers("/api/teacher/**").hasAnyAuthority(TEACHER, ADMIN, SUPERADMIN)
                 .anyRequest().authenticated()
+            )
+            .exceptionHandling(ex -> ex
+                // No / expired / invalid token → 401 so the frontend logs the user out.
+                // (Without this Spring answers 403, which the frontend treats as "no permission".)
+                .authenticationEntryPoint((req, res, e) -> {
+                    res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                    res.setContentType("application/json");
+                    res.getWriter().write("{\"message\":\"Session expired. Please log in again.\"}");
+                })
+                // Valid token, wrong role → 403
+                .accessDeniedHandler((req, res, e) -> {
+                    res.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                    res.setContentType("application/json");
+                    res.getWriter().write("{\"message\":\"You do not have permission to do that.\"}");
+                })
             )
             .sessionManagement(session ->
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)

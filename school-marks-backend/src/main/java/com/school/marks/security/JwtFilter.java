@@ -54,7 +54,15 @@ public class JwtFilter extends OncePerRequestFilter {
         }
 
         if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-            UserDetails userDetails = this.userDetailsService.loadUserByUsername(username);
+            UserDetails userDetails;
+            try {
+                // Re-read from the DB on every request: a deactivated or deleted
+                // account loses access immediately, even with an unexpired token.
+                userDetails = this.userDetailsService.loadUserByUsername(username);
+            } catch (Exception e) {
+                filterChain.doFilter(request, response); // unauthenticated → 401 from entry point
+                return;
+            }
 
             if (jwtUtil.isTokenValid(jwt, userDetails)) {
                 UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(

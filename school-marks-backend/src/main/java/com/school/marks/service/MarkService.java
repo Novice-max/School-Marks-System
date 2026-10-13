@@ -24,7 +24,7 @@ public class MarkService {
     private final ExamRepository examRepository;
     private final UserRepository userRepository;
     private final TeacherSubjectAssignmentRepository assignmentRepository;
-    private final AuditLogRepository auditLogRepository;
+    private final AuditService auditService;
 
     // ===================== GRADE CALCULATION =====================
 
@@ -67,6 +67,10 @@ public class MarkService {
 
         // SECURITY CHECK: Teacher can only enter marks for their assigned subject+class
         if (user.getRole() == User.Role.TEACHER) {
+            if (!subject.isActiveSubject()) {
+                throw new AccessDeniedException("This subject has been archived and no longer accepts marks");
+            }
+
             boolean isAssigned = assignmentRepository
                 .existsByTeacher_TeacherIdAndSubject_SubjectIdAndClassRoom_ClassIdAndAcademicYearAndTerm(
                     user.getTeacher().getTeacherId(),
@@ -94,7 +98,14 @@ public class MarkService {
 
         if (existingMark.isPresent()) {
             mark = existingMark.get();
-            oldValue = mark.getScore().toString();
+
+            // Bulk saves resend every row. Unchanged scores are skipped so the
+            // audit log only shows real edits.
+            if (mark.getScore() != null && mark.getScore().compareTo(dto.getScore()) == 0) {
+                return mark;
+            }
+
+            oldValue = mark.getScore() != null ? mark.getScore().stripTrailingZeros().toPlainString() : null;
             mark.setScore(dto.getScore());
             mark.setGrade(grade);
             mark.setGradePoints(gradePoints);
@@ -113,15 +124,20 @@ public class MarkService {
 
         Mark saved = markRepository.save(mark);
 
-        // Audit log
-        auditLogRepository.save(AuditLog.builder()
-                .user(user)
-                .action(oldValue == null ? "INSERT" : "UPDATE")
-                .tableName("marks")
-                .recordId(saved.getMarkId())
-                .oldValue(oldValue)
-                .newValue(dto.getScore().toString())
-                .build());
+        // Audit log — readable without joins
+        String description = subject.getSubjectName()
+                + " · " + exam.getClassRoom().getDisplayName()
+                + " · " + exam.getExamName() + " T" + exam.getTerm() + " " + exam.getAcademicYear()
+                + " · " + student.getFullName() + " (" + student.getAdmissionNumber() + ")";
+
+        auditService.record(
+                AuditService.MARKS,
+                existingMark.isPresent() ? "UPDATE" : "INSERT",
+                "marks",
+                saved.getMarkId(),
+                description,
+                oldValue,
+                dto.getScore().stripTrailingZeros().toPlainString());
 
         return saved;
     }

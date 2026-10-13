@@ -12,6 +12,7 @@ public interface StudentRepository extends JpaRepository<Student, Long> {
     List<Student> findByClassRoom_ClassId(Long classId);
     Optional<Student> findByAdmissionNumber(String admissionNumber);
     boolean existsByAdmissionNumber(String admissionNumber);
+    long countByIsActiveTrue();
     @Query("SELECT s FROM Student s WHERE " +
        "LOWER(s.firstName) LIKE LOWER(CONCAT('%', :q, '%')) OR " +
        "LOWER(s.lastName) LIKE LOWER(CONCAT('%', :q, '%')) OR " +

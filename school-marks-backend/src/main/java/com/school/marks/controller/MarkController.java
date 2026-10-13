@@ -56,13 +56,13 @@ public class MarkController {
                 .map(m -> m.getSubject().getSubjectId())
                 .collect(Collectors.toSet());
 
-        // Fall back to all subjects if exam is fresh (no marks yet)
-        List<Subject> allSubjects = subjectRepository.findAll();
+        // Fresh exam (no marks yet) → the class level's active subjects.
+        // Otherwise → the subjects already used in this exam (archived ones included,
+        // so historical marks stay editable).
+        String levelType = exam.getClassRoom().getLevelType();
         List<Subject> subjects = usedSubjectIds.isEmpty()
-                ? allSubjects
-                : allSubjects.stream()
-                        .filter(sub -> usedSubjectIds.contains(sub.getSubjectId()))
-                        .collect(Collectors.toList());
+                ? subjectRepository.findActiveByLevelType(levelType)
+                : subjectRepository.findAllById(usedSubjectIds);
 
         // This student's existing marks for this exam
         List<Mark> studentMarks = markRepository

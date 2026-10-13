@@ -16,4 +16,9 @@ public interface TeacherSubjectAssignmentRepository extends JpaRepository<Teache
 
     boolean existsByTeacher_TeacherIdAndSubject_SubjectIdAndClassRoom_ClassId(
         Long teacherId, Long subjectId, Long classId);
+
+    // Ownership check: does this teacher teach anything in this class?
+    boolean existsByTeacher_TeacherIdAndClassRoom_ClassId(Long teacherId, Long classId);
+
+    long countBySubject_SubjectId(Long subjectId);
 }
