@@ -55,8 +55,10 @@ public class ReportService {
     private static final DeviceRgb BAR_BG          = new DeviceRgb(228, 228, 235);
     private static final DeviceRgb CLASS_BAR_COLOR = new DeviceRgb(160, 160, 170);
 
-    private static final float WATERMARK_OPACITY = 0.07f;
-    private static final float WATERMARK_SCALE   = 0.30f;
+    private static final float WATERMARK_OPACITY  = 0.07f;
+    private static final float WATERMARK_WIDTH    = 0.80f;  // watermark spans 80% of page width...
+    private static final float WATERMARK_MAX_H    = 0.80f;  // ...but never more than 80% of page height
+    private static final float HEADER_LOGO_SIZE   = 80f;    // header logo (was 58 / 52)
 
     private static class ExamSlot {
         final String header;
@@ -120,7 +122,16 @@ public class ReportService {
                 Rectangle ps = page.getPageSize();
                 float w = ps.getWidth();
                 float h = ps.getHeight();
-                float size = Math.min(w, h) * WATERMARK_SCALE;
+
+                // Scale to 80% of page width, keep the logo's real aspect ratio
+                // (no distortion), and cap height so landscape pages don't overflow.
+                float aspect = logo.getHeight() / logo.getWidth();
+                float drawW = w * WATERMARK_WIDTH;
+                float drawH = drawW * aspect;
+                if (drawH > h * WATERMARK_MAX_H) {
+                    drawH = h * WATERMARK_MAX_H;
+                    drawW = drawH / aspect;
+                }
 
                 PdfCanvas canvas = new PdfCanvas(
                         page.newContentStreamBefore(), page.getResources(), de.getDocument());
@@ -128,9 +139,9 @@ public class ReportService {
                 canvas.setExtGState(faded);
                 canvas.addXObjectWithTransformationMatrix(
                         logo,
-                        size, 0, 0, size,
-                        ps.getLeft() + (w - size) / 2f,
-                        ps.getBottom() + (h - size) / 2f);
+                        drawW, 0, 0, drawH,
+                        ps.getLeft() + (w - drawW) / 2f,
+                        ps.getBottom() + (h - drawH) / 2f);
                 canvas.restoreState();
                 canvas.release();
             } catch (Exception e) {
@@ -522,7 +533,7 @@ public class ReportService {
             // ── PAGE 1 ──
             Table ht = new Table(UnitValue.createPercentArray(new float[]{18,82})).setWidth(UnitValue.createPercentValue(100));
             if (headerLogo!=null) {
-                Image logo = new Image(headerLogo).setWidth(52).setHeight(52);
+                Image logo = new Image(headerLogo).setWidth(HEADER_LOGO_SIZE).setHeight(HEADER_LOGO_SIZE);
                 ht.addCell(new Cell().add(logo).setBorder(Border.NO_BORDER).setVerticalAlignment(VerticalAlignment.MIDDLE).setHorizontalAlignment(HorizontalAlignment.CENTER));
             } else ht.addCell(new Cell().setBorder(Border.NO_BORDER));
             ht.addCell(new Cell()
@@ -917,7 +928,7 @@ public class ReportService {
     private void buildReportHeader(Document doc, PdfFont bold, PdfFont regular, PdfFont italic) throws Exception {
         Table ht = new Table(UnitValue.createPercentArray(new float[]{18,82})).setWidth(UnitValue.createPercentValue(100));
         try (InputStream ls = ReportService.class.getResourceAsStream("/static/school_logo.png")) {
-            if (ls!=null) ht.addCell(new Cell().add(new Image(ImageDataFactory.create(ls.readAllBytes())).setWidth(58).setHeight(58)).setBorder(Border.NO_BORDER).setVerticalAlignment(VerticalAlignment.MIDDLE).setHorizontalAlignment(HorizontalAlignment.CENTER));
+            if (ls!=null) ht.addCell(new Cell().add(new Image(ImageDataFactory.create(ls.readAllBytes())).setWidth(HEADER_LOGO_SIZE).setHeight(HEADER_LOGO_SIZE)).setBorder(Border.NO_BORDER).setVerticalAlignment(VerticalAlignment.MIDDLE).setHorizontalAlignment(HorizontalAlignment.CENTER));
             else ht.addCell(new Cell().setBorder(Border.NO_BORDER));
         } catch (Exception ignored) { ht.addCell(new Cell().setBorder(Border.NO_BORDER)); }
         ht.addCell(new Cell()
@@ -975,7 +986,7 @@ public class ReportService {
     private float headerFont(int n) { return n<=7?10f:9f; }
 
     // ── Grade helpers ──
-    private String getGrade(double score) {//Calc marks
+    private String getGrade(double score) {
         return markService.calculateCbcGrade(java.math.BigDecimal.valueOf(score));
     }
     private DeviceRgb getGradeColor(String g) {
