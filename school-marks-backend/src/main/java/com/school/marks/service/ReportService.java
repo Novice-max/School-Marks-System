@@ -215,7 +215,7 @@ public class ReportService {
             for (String subName : allSubjects) {
                 SubjectMarkDTO sm = markMap.get(subName);
                 if (sm != null && sm.getScore() != null) {
-                    Cell cell = new Cell().add(new Paragraph(sm.getScore().toPlainString()).setFont(regular).setFontSize(cf))
+                    Cell cell = new Cell().add(new Paragraph(fmtMark(sm.getScore())).setFont(regular).setFontSize(cf))
                             .setTextAlignment(TextAlignment.CENTER).setVerticalAlignment(VerticalAlignment.MIDDLE).setPadding(3);
                     if (rc != null) cell.setBackgroundColor(rc);
                     if (sm.getGrade() != null) cell.setFontColor(getGradeColor(sm.getGrade()));
@@ -278,7 +278,7 @@ public class ReportService {
         double ts = 0; int sc = 0; boolean alt = false;
         for (SubjectMarkDTO sm : studentData.getSubjectMarks()) {
             DeviceRgb rb = alt ? ALT_ROW_COLOR : null;
-            String ss = sm.getScore() != null ? sm.getScore().toPlainString() : "";
+            String ss = sm.getScore() != null ? fmtMark(sm.getScore()) : "";
             double sv = sm.getScore() != null ? sm.getScore().doubleValue() : 0;
             String lv = sm.getScore() != null ? getGrade(sv) : "";
             addMarkCell(mt, sm.getSubjectName(), regular, bf, rb, TextAlignment.LEFT, rh);
@@ -301,7 +301,7 @@ public class ReportService {
         String tstr = sc > 0 ? String.format("%.0f", ts) : "";
         String astr = sc > 0 ? String.format("%.1f", av) : "";
         String alvl = sc > 0 ? getGrade(av) : "";
-        mt.addCell(new Cell().add(new Paragraph("TOTAL").setFont(bold).setFontSize(bf)).setBackgroundColor(TOTAL_ROW_BG).setPadding(6).setMinHeight(rh));
+        mt.addCell(new Cell().add(new Paragraph("TOTAL").setFont(bold).setFontSize(bf)).setVerticalAlignment(VerticalAlignment.MIDDLE).setBackgroundColor(TOTAL_ROW_BG).setPadding(6).setMinHeight(rh));
         if (isMid) {
             addMarkCell(mt, tstr, bold, bf, TOTAL_ROW_BG, TextAlignment.CENTER, rh); addMarkCell(mt, "", bold, bf-1, TOTAL_ROW_BG, TextAlignment.CENTER, rh);
             addMarkCell(mt, "", bold, bf, TOTAL_ROW_BG, TextAlignment.CENTER, rh); addMarkCell(mt, "", bold, bf-1, TOTAL_ROW_BG, TextAlignment.CENTER, rh);
@@ -410,7 +410,7 @@ public class ReportService {
             double sA = 0; int sN = 0;
             for (int i = 0; i < slots.size(); i++) {
                 BigDecimal score = slots.get(i).marks.get(sub.getSubjectName());
-                addMarkCell(mt, score!=null?score.toPlainString():"", regular, bf, rb, TextAlignment.CENTER, rh);
+                addMarkCell(mt, score!=null?fmtMark(score):"", regular, bf, rb, TextAlignment.CENTER, rh);
                 addMarkCell(mt, score!=null?getGrade(score.doubleValue()):"", bold, bf-1, rb, TextAlignment.CENTER, rh);
                 if (score!=null) { sTotals[i]+=score.doubleValue(); sCounts[i]++; sA+=score.doubleValue(); sN++; }
             }
@@ -418,7 +418,7 @@ public class ReportService {
             else { addMarkCell(mt,"",regular,bf,rb,TextAlignment.CENTER,rh); addMarkCell(mt,"",bold,bf-1,rb,TextAlignment.CENTER,rh); }
             alt = !alt;
         }
-        mt.addCell(new Cell().add(new Paragraph("TOTAL").setFont(bold).setFontSize(bf)).setBackgroundColor(TOTAL_ROW_BG).setPadding(4).setMinHeight(rh));
+        mt.addCell(new Cell().add(new Paragraph("TOTAL").setFont(bold).setFontSize(bf)).setVerticalAlignment(VerticalAlignment.MIDDLE).setBackgroundColor(TOTAL_ROW_BG).setPadding(4).setMinHeight(rh));
         for (int i=0;i<slots.size();i++) { addMarkCell(mt,sCounts[i]>0?String.format("%.0f",sTotals[i]):"",bold,bf,TOTAL_ROW_BG,TextAlignment.CENTER,rh); addMarkCell(mt,"",bold,bf-1,TOTAL_ROW_BG,TextAlignment.CENTER,rh); }
         double oAvg = aC>0?tAvg/aC:0;
         addMarkCell(mt,aC>0?String.format("%.1f",oAvg):"",bold,bf,TOTAL_ROW_BG,TextAlignment.CENTER,rh);
@@ -563,7 +563,7 @@ public class ReportService {
                 double sA=0; int sN=0;
                 for (int i=0;i<bSlots.size();i++) {
                     BigDecimal score = sMaps.get(i).get(sub.getSubjectName());
-                    addMarkCell(mt, score!=null?score.toPlainString():"", regular, bf, rb, TextAlignment.CENTER, rh);
+                    addMarkCell(mt, score!=null?fmtMark(score):"", regular, bf, rb, TextAlignment.CENTER, rh);
                     addMarkCell(mt, score!=null?getGrade(score.doubleValue()):"", bold, bf-1, rb, TextAlignment.CENTER, rh);
                     if (score!=null) { sTotals[i]+=score.doubleValue(); sCounts[i]++; sA+=score.doubleValue(); sN++; }
                 }
@@ -571,7 +571,7 @@ public class ReportService {
                 else { addMarkCell(mt,"",regular,bf,rb,TextAlignment.CENTER,rh); addMarkCell(mt,"",bold,bf-1,rb,TextAlignment.CENTER,rh); }
                 altR = !altR;
             }
-            mt.addCell(new Cell().add(new Paragraph("TOTAL").setFont(bold).setFontSize(bf)).setBackgroundColor(TOTAL_ROW_BG).setPadding(4).setMinHeight(rh));
+            mt.addCell(new Cell().add(new Paragraph("TOTAL").setFont(bold).setFontSize(bf)).setVerticalAlignment(VerticalAlignment.MIDDLE).setBackgroundColor(TOTAL_ROW_BG).setPadding(4).setMinHeight(rh));
             for (int i=0;i<bSlots.size();i++) { addMarkCell(mt,sCounts[i]>0?String.format("%.0f",sTotals[i]):"",bold,bf,TOTAL_ROW_BG,TextAlignment.CENTER,rh); addMarkCell(mt,"",bold,bf-1,TOTAL_ROW_BG,TextAlignment.CENTER,rh); }
             double oAvg=aC>0?tAvg/aC:0;
             addMarkCell(mt,aC>0?String.format("%.1f",oAvg):"",bold,bf,TOTAL_ROW_BG,TextAlignment.CENTER,rh);
@@ -978,6 +978,15 @@ public class ReportService {
     private void addMarkCell(Table t, String text, PdfFont f, float fs, DeviceRgb bg, TextAlignment a, float mh) {
         Cell c = new Cell().add(new Paragraph(text!=null?text:"").setFont(f).setFontSize(fs)).setTextAlignment(a).setVerticalAlignment(VerticalAlignment.MIDDLE).setPadding(4).setMinHeight(mh);
         if (bg!=null) c.setBackgroundColor(bg); t.addCell(c);
+    }
+
+    // ── Mark formatting ──
+    // Shows marks as entered: 90.00 -> "90", 72.50 -> "72.5". No rounding, so half marks are never lost.
+    private String fmtMark(BigDecimal score) {
+        if (score == null) return "";
+        BigDecimal s = score.stripTrailingZeros();
+        if (s.scale() < 0) s = s.setScale(0); // stripTrailingZeros turns 100 into 1E+2 internally
+        return s.toPlainString();
     }
 
     // ── Sizing helpers ──
