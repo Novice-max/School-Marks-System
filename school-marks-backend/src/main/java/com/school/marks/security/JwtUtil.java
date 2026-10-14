@@ -16,8 +16,8 @@ import java.util.function.Function;
 /**
  * Short-lived, sliding JWTs.
  *
- * - A token lives for jwt.idle-minutes (default 16). The frontend logs the user out
- *   after 15 idle minutes and refreshes the token at most once a minute while the
+ * - A token lives for jwt.idle-minutes (default 21). The frontend logs the user out
+ *   after 20 idle minutes and refreshes the token at most once a minute while the
  *   user is active, so an idle session always dies on the server too.
  * - The "sst" (session start) claim survives refreshes. Once a session is older than
  *   jwt.max-session-hours (default 12), refresh is refused and the user must log in
@@ -31,7 +31,7 @@ public class JwtUtil {
     @Value("${jwt.secret}")
     private String secretKey;
 
-    @Value("${jwt.idle-minutes:16}")
+    @Value("${jwt.idle-minutes:21}")
     private long idleMinutes;
 
     @Value("${jwt.max-session-hours:12}")

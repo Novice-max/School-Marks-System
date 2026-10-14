@@ -84,7 +84,7 @@ public class AuthController {
         String reason = body != null ? body.getOrDefault("reason", "manual") : "manual";
         boolean timeout = "timeout".equalsIgnoreCase(reason);
         auditService.record(AuditService.AUTH, timeout ? "SESSION_TIMEOUT" : "LOGOUT", "users", null,
-                timeout ? "Signed out after 15 minutes of inactivity" : "Signed out");
+                timeout ? "Signed out after 20 minutes of inactivity" : "Signed out");
         return ResponseEntity.noContent().build();
     }
 
