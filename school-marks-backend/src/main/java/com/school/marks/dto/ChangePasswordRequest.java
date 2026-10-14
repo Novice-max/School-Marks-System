@@ -1,8 +1,10 @@
 package com.school.marks.dto;
-import jakarta.validation.constraints.*;
+import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
+
+/** Length and strength rules live in PasswordPolicy (server-side, readable error messages). */
 @Data
 public class ChangePasswordRequest {
     @NotBlank private String currentPassword;
-    @NotBlank @Size(min=6) private String newPassword;
+    @NotBlank private String newPassword;
 }

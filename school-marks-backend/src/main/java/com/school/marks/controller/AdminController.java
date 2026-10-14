@@ -1,6 +1,8 @@
 package com.school.marks.controller;
 import com.school.marks.model.*;
 import com.school.marks.repository.*;
+import com.school.marks.security.PasswordPolicy;
+import com.school.marks.security.TempPasswords;
 import com.school.marks.service.AuditService;
 import com.school.marks.service.AuthService;
 import com.school.marks.service.MarkService;
@@ -40,12 +42,15 @@ public class AdminController {
         Teacher teacher = Teacher.builder()
                 .firstName(body.get("firstName")).lastName(body.get("lastName"))
                 .email(body.get("email")).phone(body.get("phone")).build();
+        // Validate the username BEFORE saving anything (no spaces, 3–30 safe characters)
+        String username = PasswordPolicy.validUsername(body.get("username"));
         Teacher saved = teacherRepository.save(teacher);
-        String username = body.get("username");
-        User user = authService.createTeacherUser(username, saved);
+        String tempPassword = TempPasswords.generate(); // random, shown to the admin once, never stored in plain text
+        User user = authService.createTeacherUser(username, saved, tempPassword);
         audit.record(AuditService.TEACHERS, "CREATE", "teachers", saved.getTeacherId(),
                 "Created teacher " + saved.getFullName() + " (login: " + user.getUsername() + ")");
-        return ResponseEntity.ok(Map.of("message","Teacher created","defaultPassword",username+"123","username",username));
+        // Key stays "defaultPassword" so the existing TeachersPage keeps working
+        return ResponseEntity.ok(Map.of("message","Teacher created","defaultPassword",tempPassword,"username",user.getUsername()));
     }
 
     @PutMapping("/teachers/{teacherId}")
@@ -71,7 +76,7 @@ public class AdminController {
             .orElseThrow(() -> new RuntimeException("Teacher not found"));
         User user = userRepository.findByTeacher_TeacherId(teacherId)
             .orElseThrow(() -> new RuntimeException("User account not found"));
-        String newPassword = user.getUsername() + "123";
+        String newPassword = TempPasswords.generate(); // was username+"123" — guessable by anyone who knew the pattern
         user.setPasswordHash(passwordEncoder.encode(newPassword));
         user.setIsFirstLogin(true);
         userRepository.save(user);

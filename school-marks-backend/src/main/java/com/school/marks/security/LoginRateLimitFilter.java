@@ -1,8 +1,5 @@
 package com.school.marks.security;
 
-import io.github.bucket4j.Bandwidth;
-import io.github.bucket4j.Bucket;
-import io.github.bucket4j.Refill;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -13,32 +10,18 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.time.Duration;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * Coarse per-IP flood guard on the login endpoint (30 / minute).
+ * The finer per-account limit runs in AuthController, where the username is known.
+ */
 @Component
 public class LoginRateLimitFilter extends OncePerRequestFilter {
 
-    // One bucket per IP address
-    private final Map<String, Bucket> buckets = new ConcurrentHashMap<>();
+    private final LoginThrottle throttle;
 
-    private Bucket createBucket() {
-        // Allow 5 attempts per minute, refill 5 tokens every 60 seconds
-        Bandwidth limit = Bandwidth.classic(5, Refill.intervally(5, Duration.ofMinutes(1)));
-        return Bucket.builder().addLimit(limit).build();
-    }
-
-    private Bucket getBucket(String ip) {
-        return buckets.computeIfAbsent(ip, k -> createBucket());
-    }
-
-    private String getClientIp(HttpServletRequest request) {
-        String forwarded = request.getHeader("X-Forwarded-For");
-        if (forwarded != null && !forwarded.isEmpty()) {
-            return forwarded.split(",")[0].trim();
-        }
-        return request.getRemoteAddr();
+    public LoginRateLimitFilter(LoginThrottle throttle) {
+        this.throttle = throttle;
     }
 
     @Override
@@ -48,26 +31,18 @@ public class LoginRateLimitFilter extends OncePerRequestFilter {
             @NonNull FilterChain filterChain
     ) throws ServletException, IOException {
 
-        // Only rate limit the login endpoint
-        if (!request.getRequestURI().equals("/api/auth/login") ||
-            !request.getMethod().equals("POST")) {
+        if (!"/api/auth/login".equals(request.getRequestURI()) || !"POST".equals(request.getMethod())) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        String clientIp = getClientIp(request);
-        Bucket bucket = getBucket(clientIp);
-
-        if (bucket.tryConsume(1)) {
-            // Request allowed
+        if (throttle.allowIp(ClientIp.resolve(request))) {
             filterChain.doFilter(request, response);
         } else {
-            // Too many attempts
             response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
             response.setContentType("application/json");
             response.getWriter().write(
-                "{\"error\": \"Too many login attempts. Please wait 1 minute before trying again.\"}"
-            );
+                "{\"message\":\"Too many login attempts from this network. Please wait 1 minute.\"}");
         }
     }
 }

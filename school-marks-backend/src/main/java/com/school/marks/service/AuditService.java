@@ -4,6 +4,7 @@ import com.school.marks.model.AuditLog;
 import com.school.marks.model.User;
 import com.school.marks.repository.AuditLogRepository;
 import com.school.marks.repository.UserRepository;
+import com.school.marks.security.ClientIp;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -66,13 +67,26 @@ public class AuditService {
               actor != null ? actor.getUserId() : null, description, null, null);
     }
 
-    /** Failed login — the username may not exist, so it's stored as typed. */
+    /**
+     * Failed login. A real username is stored as-is (wrong password).
+     * An unknown one is masked — people often type their PASSWORD into the
+     * username box ("Violet123"), and that must never sit in the log in plain text.
+     */
     @Transactional
     public void recordFailedLogin(String attemptedUsername, String reason) {
-        User known = attemptedUsername == null ? null
-                : userRepository.findByUsername(attemptedUsername).orElse(null);
-        String name = attemptedUsername == null ? null
-                : attemptedUsername.substring(0, Math.min(attemptedUsername.length(), 100));
+        String typed = attemptedUsername == null ? "" : attemptedUsername.trim();
+        User known = typed.isEmpty() ? null : userRepository.findByUsername(typed).orElse(null);
+
+        String name;
+        if (known != null) {
+            name = known.getUsername();
+        } else if (typed.isEmpty()) {
+            name = null;
+        } else {
+            int keep = Math.min(2, typed.length());
+            int hidden = Math.min(typed.length() - keep, 20);
+            name = typed.substring(0, keep) + "\u2022".repeat(hidden) + " (unknown)";
+        }
         write(known, name, AUTH, "LOGIN_FAILED", "users",
               known != null ? known.getUserId() : null, reason, null, null);
     }
@@ -108,8 +122,8 @@ public class AuditService {
             ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
             if (attrs == null) return null;
             HttpServletRequest req = attrs.getRequest();
-            String fwd = req.getHeader("X-Forwarded-For");
-            String ip = (fwd != null && !fwd.isBlank()) ? fwd.split(",")[0].trim() : req.getRemoteAddr();
+            // Same resolution as the rate limiter: the real client, not a header the client can fake
+            String ip = ClientIp.resolve(req);
             return ip == null ? null : ip.substring(0, Math.min(ip.length(), 64));
         } catch (Exception e) {
             return null;
