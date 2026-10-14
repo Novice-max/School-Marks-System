@@ -15,9 +15,11 @@ export default function LoginPage() {
   const { tokens, isDark }          = useTheme();
   const navigate                    = useNavigate();
 
+  // 'true' = timed out / token expired · 'reset' = password was reset while signed in
   useEffect(() => {
-    if (sessionStorage.getItem('sessionExpired') === 'true') {
-      setExpired(true);
+    const flag = sessionStorage.getItem('sessionExpired');
+    if (flag) {
+      setExpired(flag);
       sessionStorage.removeItem('sessionExpired');
     }
   }, []);
@@ -27,7 +29,8 @@ export default function LoginPage() {
     setLoading(true);
     setExpired(false);
     try {
-      const { data } = await login(form);
+      // Phones often add a space after autocomplete ("Lucy "), which made valid logins fail
+      const { data } = await login({ username: form.username.trim(), password: form.password });
       loginUser(data);
       if (data.firstLogin) {
         navigate('/change-password');
@@ -35,8 +38,12 @@ export default function LoginPage() {
         navigate(homeFor(data.role));
       }
     } catch (err) {
-      if (err.response?.status === 429) {
-        toast.error('Too many attempts. Wait 1 minute and try again.');
+      const status = err.response?.status;
+      if (status === 429 || status === 403) {
+        // 429: rate limited · 403: correct password but account deactivated
+        toast.error(err.response?.data?.message || 'Please wait 1 minute and try again.');
+      } else if (!err.response) {
+        toast.error('Cannot reach the server. Check your internet connection.');
       } else {
         toast.error('Invalid username or password');
       }
@@ -118,7 +125,9 @@ export default function LoginPage() {
 
           {expired && (
             <div style={s.expiredBanner}>
-              ⏱️ Session expired due to inactivity. Please log in again.
+              {expired === 'reset'
+                ? '🔑 Your password was reset. Sign in with the temporary password from the school admin.'
+                : '⏱️ Session expired due to inactivity. Please log in again.'}
             </div>
           )}
 

@@ -18,11 +18,23 @@ export default function ChangePasswordPage() {
   const { tokens }                  = useTheme();
   const navigate                    = useNavigate();
 
+  // Same rules the server enforces (PasswordPolicy.java) — shown live so nobody
+  // has to guess. The server is still the final check.
+  const uname = (user?.username || '').toLowerCase();
+  const rules = [
+    { ok: newPass.length >= 8,                                        text: 'At least 8 characters' },
+    { ok: newPass.length > 0 && !(uname.length >= 3 && newPass.toLowerCase().includes(uname)),
+                                                                      text: 'Does not contain your username' },
+    { ok: newPass.length > 0 && newPass !== current,                  text: 'Different from your current password' },
+    { ok: new Set(newPass.toLowerCase()).size >= 4,                   text: 'At least 4 different characters' },
+    { ok: newPass.length > 0 && newPass === newPass.trim(),           text: 'No space at the start or end' },
+  ];
+  const allRulesOk = rules.every(r => r.ok) && newPass.length <= 72;
+
   const handle = async (e) => {
     e.preventDefault();
-    if (newPass.length < 6) { toast.error('Min 6 characters'); return; }
+    if (!allRulesOk) { toast.error('New password does not meet the rules below it'); return; }
     if (newPass !== confirm) { toast.error('Passwords do not match'); return; }
-    if (newPass === current) { toast.error('New password must differ from current'); return; }
     setLoading(true);
     try {
       await changePassword({ currentPassword: current, newPassword: newPass });
@@ -30,20 +42,12 @@ export default function ChangePasswordPage() {
       clearFirstLogin();
       navigate(homeFor(user.role));
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed');
+      toast.error(err.response?.data?.message || 'Could not change password. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  const strength = newPass.length >= 8 ? '✅ Strong'
-                 : newPass.length >= 6 ? '⚠️ Acceptable'
-                 : newPass.length > 0  ? '❌ Too short'
-                 : '';
-
-  const strengthColor = newPass.length >= 8 ? tokens.successText
-                      : newPass.length >= 6 ? tokens.warningText
-                      : tokens.danger;
 
   const s = {
     wrapper: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: tokens.bg, transition: 'background 0.3s ease' },
@@ -88,12 +92,20 @@ export default function ChangePasswordPage() {
             <div style={s.row}>
               <input style={s.input} type={showNew ? 'text' : 'password'}
                 value={newPass} onChange={e => setNewPass(e.target.value)}
-                placeholder="Enter new password" autoComplete="new-password" required minLength={6} />
+                placeholder="Enter new password" autoComplete="new-password" required minLength={8} maxLength={72} />
               <button type="button" style={s.eye} onClick={() => setShowNew(v => !v)}>
                 {showNew ? '🙈' : '👁️'}
               </button>
             </div>
-            {strength && <div style={{ fontSize: 12, fontWeight: 600, marginTop: 4, color: strengthColor }}>{strength}</div>}
+            {newPass && (
+              <ul style={{ listStyle: 'none', padding: 0, margin: '6px 0 0', display: 'grid', gap: 2 }}>
+                {rules.map(r => (
+                  <li key={r.text} style={{ fontSize: 12, color: r.ok ? tokens.successText : tokens.textFaint }}>
+                    {r.ok ? '✓' : '○'} {r.text}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
 
           <div>
@@ -101,7 +113,7 @@ export default function ChangePasswordPage() {
             <div style={s.row}>
               <input style={s.input} type={showCon ? 'text' : 'password'}
                 value={confirm} onChange={e => setConfirm(e.target.value)}
-                placeholder="Confirm new password" autoComplete="new-password" required minLength={6} />
+                placeholder="Confirm new password" autoComplete="new-password" required minLength={8} maxLength={72} />
               <button type="button" style={s.eye} onClick={() => setShowCon(v => !v)}>
                 {showCon ? '🙈' : '👁️'}
               </button>
@@ -109,7 +121,7 @@ export default function ChangePasswordPage() {
             {confirm && newPass !== confirm && (
               <div style={{ fontSize: 12, color: tokens.danger, marginTop: 4 }}>❌ Passwords do not match</div>
             )}
-            {confirm && newPass === confirm && confirm.length >= 6 && (
+            {confirm && newPass === confirm && allRulesOk && (
               <div style={{ fontSize: 12, color: tokens.successText, marginTop: 4 }}>✅ Passwords match</div>
             )}
           </div>

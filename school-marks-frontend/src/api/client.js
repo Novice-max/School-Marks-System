@@ -20,7 +20,9 @@ api.interceptors.response.use(
     const isAuthCall = url.includes('/auth/login') || url.includes('/auth/logout');
     if (err.response?.status === 401 && !isAuthCall && sessionStorage.getItem('token')) {
       sessionStorage.clear();
-      sessionStorage.setItem('sessionExpired', 'true');
+      // Password reset by an admin while signed in → explain that instead of "session expired"
+      const resetRequired = err.response?.data?.code === 'PASSWORD_CHANGE_REQUIRED';
+      sessionStorage.setItem('sessionExpired', resetRequired ? 'reset' : 'true');
       window.location.href = '/login';
     }
     return Promise.reject(err);

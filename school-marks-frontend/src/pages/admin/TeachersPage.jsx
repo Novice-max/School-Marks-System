@@ -36,7 +36,7 @@ export default function TeachersPage() {
   const submit = async (e) => {
     e.preventDefault(); setLoading(true);
     try {
-      const { data } = await createTeacher(form);
+      const { data } = await createTeacher({ ...form, username: form.username.trim() });
       toast.success('Teacher created');
       setShowCreds({ username: data.username, password: data.defaultPassword });
       setForm({ firstName: '', lastName: '', email: '', phone: '', username: '' });
@@ -88,7 +88,8 @@ export default function TeachersPage() {
 
       {/* Credentials popup */}
       {showCreds && (
-        <div style={s.overlay} onClick={() => setShowCreds(null)}>
+        // No close-on-outside-click: the temporary password is shown only once
+        <div style={s.overlay}>
           <div style={s.modal} onClick={e => e.stopPropagation()}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>{showCreds.isReset ? '🔄' : '✅'}</div>
             <h3 style={s.modalTitle}>{showCreds.isReset ? `Password Reset — ${showCreds.name}` : 'Teacher Created'}</h3>
@@ -99,10 +100,23 @@ export default function TeachersPage() {
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0' }}>
                 <span style={{ fontSize: 13, color: t.textFaint }}>Temp Password</span>
-                <strong style={{ fontSize: 14, color: t.text }}>{showCreds.password}</strong>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                  <strong style={{ fontSize: 16, color: t.text, fontFamily: 'ui-monospace, Consolas, monospace', letterSpacing: '0.04em' }}>
+                    {showCreds.password}
+                  </strong>
+                  <button type="button"
+                    onClick={() => navigator.clipboard?.writeText(showCreds.password)
+                      .then(() => toast.success('Copied'))
+                      .catch(() => toast.error('Copy failed — write it down'))}
+                    style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6, cursor: 'pointer',
+                             border: `1px solid ${t.border}`, background: 'transparent', color: t.textMuted }}>
+                    Copy
+                  </button>
+                </span>
               </div>
             </div>
-            <p style={{ fontSize: 12, color: t.danger, marginBottom: 16 }}>⚠️ Teacher must change password on first login</p>
+            <p style={{ fontSize: 12, color: t.danger, marginBottom: 6 }}>⚠️ Shown only once — give it to the teacher now.</p>
+            <p style={{ fontSize: 12, color: t.textFaint, marginBottom: 16 }}>They must set their own password at first sign-in. Lost it? Reset again.</p>
             <button style={s.modalBtn} onClick={() => setShowCreds(null)}>Done</button>
           </div>
         </div>
