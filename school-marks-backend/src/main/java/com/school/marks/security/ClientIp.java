@@ -8,12 +8,16 @@ import java.util.regex.Pattern;
 /**
  * Works out the real client IP behind Railway's proxy.
  *
- * X-Forwarded-For is a list: "whatever-the-client-claimed, ..., ip-our-proxy-saw".
- * The LEFT end is written by the client and can be faked, so it must never be
- * trusted for rate limiting. Proxies append on the RIGHT, so we read from the
- * right and take the first public address — that is the address that actually
- * connected to Railway's edge. Private / internal hops (10.x, 100.64.x, etc.)
- * are skipped so an internal proxy hop is never mistaken for the client.
+ * Verified on production (14 Oct 2026) with /api/ip-check:
+ *   - Railway's edge REWRITES X-Forwarded-For to exactly "client, edge":
+ *       X-Forwarded-For: 41.90.184.20, 46.151.193.242
+ *     A value sent by the client ("6.6.6.6") was dropped, so the LEFT entry
+ *     cannot be faked from outside.
+ *   - The right-hand entries (46.151.193.241 / .242) are Railway's own edge
+ *     servers, and remoteAddr (100.64.0.x) is Railway's internal network.
+ *
+ * So: take the first public address from the left. Fall back to X-Real-IP,
+ * then the socket address, if the header is ever missing.
  */
 public final class ClientIp {
 
@@ -25,12 +29,14 @@ public final class ClientIp {
     public static String resolve(HttpServletRequest request) {
         String xff = request.getHeader("X-Forwarded-For");
         if (xff != null && !xff.isBlank()) {
-            String[] hops = xff.split(",");
-            for (int i = hops.length - 1; i >= 0; i--) {
-                String candidate = hops[i].trim();
+            for (String hop : xff.split(",")) {
+                String candidate = hop.trim();
                 if (isPublic(candidate)) return candidate;
             }
         }
+        String real = request.getHeader("X-Real-IP");
+        if (real != null && isPublic(real.trim())) return real.trim();
+
         String remote = request.getRemoteAddr();
         return remote == null ? "unknown" : remote;
     }

@@ -61,7 +61,6 @@ public class SecurityConfig {
             .cors(Customizer.withDefaults())
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/auth/login", "/actuator/health").permitAll()
-                .requestMatchers("/api/ip-check").permitAll() // TEMPORARY diagnostic — remove with IpCheckController
                 .requestMatchers("/api/superadmin/**").hasAuthority(SUPERADMIN)
                 .requestMatchers("/api/admin/**").hasAnyAuthority(ADMIN, SUPERADMIN)
                 .requestMatchers("/api/reports/**").hasAnyAuthority(ADMIN, SUPERADMIN)
