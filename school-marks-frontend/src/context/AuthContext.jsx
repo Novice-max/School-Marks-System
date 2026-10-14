@@ -3,12 +3,12 @@ import { refreshSession, logoutSession } from '../api/client';
 
 const AuthContext = createContext(null);
 
-/* ─── Session rules (must match backend jwt.idle-minutes = 16) ───
-   • 15 min with no activity  → logged out, must sign in again
+/* ─── Session rules (must match backend jwt.idle-minutes = 21) ───
+   • 20 min with no activity  → logged out, must sign in again
    • warning appears 60 s before that, with a "Stay signed in" button
    • while active, the token is refreshed at most once a minute, so the
      server-side token always outlives the frontend timer by ~1 min        */
-export const IDLE_LIMIT_MS    = 15 * 60 * 1000;
+export const IDLE_LIMIT_MS    = 20 * 60 * 1000;
 export const WARNING_MS       = 60 * 1000;
 const REFRESH_EVERY_MS        = 60 * 1000;
 const TICK_MS                 = 1000;

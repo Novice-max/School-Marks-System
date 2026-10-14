@@ -3,7 +3,7 @@ import { useTheme } from '../context/ThemeContext';
 
 /**
  * "You'll be signed out" dialog — shown for the last 60 seconds of a
- * 15-minute idle period. Rendered once in App, above every layout.
+ * 20-minute idle period. Rendered once in App, above every layout.
  */
 export default function SessionWarning() {
   const { user, warnSecsLeft, stayActive, logout } = useAuth();
