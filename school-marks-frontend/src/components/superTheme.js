@@ -72,6 +72,7 @@ export const ACTION_TEXT = {
   PASSWORD_CHANGE: 'changed password', INSERT: 'entered', UPDATE: 'edited', DELETE: 'deleted',
   CREATE: 'created', DEACTIVATE: 'deactivated', ACTIVATE: 'reactivated', RESET_PASSWORD: 'reset password',
   ARCHIVE: 'archived', RESTORE: 'restored', DOWNLOAD: 'downloaded',
+  MARK_DENIED: 'was refused saving marks', COPY_TERM: 'copied assignments to a new term',
 };
 
 export async function saveBlob(blob, filename) {

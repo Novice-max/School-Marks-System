@@ -1,6 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
-import { useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { homeFor } from './utils/roles';
@@ -46,14 +45,8 @@ function PrivateRoute({ children, roles = ANY_ROLE, shell = 'school' }) {
 function AppRoutes() {
   const { user } = useAuth();
 
-  useEffect(() => {
-    const ping = () =>
-      fetch('https://school-marks-system-production.up.railway.app/actuator/health')
-        .catch(() => {});
-    ping();
-    const interval = setInterval(ping, 10 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, []);
+  // (The old 10-minute browser "keep-alive" ping was removed: it only ran while
+  //  someone had the site open, and the external uptime monitor now does that job.)
 
   return (
     <Routes>

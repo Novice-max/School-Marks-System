@@ -106,6 +106,7 @@ export default function ActivityLog() {
     { label: 'Mark changes',   on: filters.category === 'MARKS' && filters.action === 'UPDATE',
       apply: () => { const n = new URLSearchParams(params); n.set('category', 'MARKS'); n.set('action', 'UPDATE'); setParams(n, { replace: true }); } },
     { label: 'Failed sign-ins', on: filters.action === 'LOGIN_FAILED', apply: () => setFilter('action', 'LOGIN_FAILED') },
+    { label: 'Refused saves',   on: filters.action === 'MARK_DENIED',  apply: () => setFilter('action', 'MARK_DENIED') },
     { label: 'Report downloads', on: filters.category === 'REPORTS', apply: () => setFilter('category', 'REPORTS') },
   ];
 

@@ -8,7 +8,7 @@ export default function ActivityRow({ e, showDate = false, compact = false }) {
   const t = th.t;
   const [open, setOpen] = useState(false);
 
-  const failed   = e.action === 'LOGIN_FAILED';
+  const failed   = e.action === 'LOGIN_FAILED' || e.action === 'MARK_DENIED';
   const removal  = e.action === 'DELETE' || e.action === 'DEACTIVATE' || e.action === 'ARCHIVE';
   const hasDiff  = e.oldValue != null || e.newValue != null;
   const shortDiff = hasDiff && (e.oldValue || '').length <= 16 && (e.newValue || '').length <= 16;

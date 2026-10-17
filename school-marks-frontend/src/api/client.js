@@ -49,6 +49,9 @@ export const createExam              = (data)      => api.post('/admin/exams', d
 export const assignTeacher           = (data)      => api.post('/admin/assign', data);
 export const getAssignmentsByTeacher = (tid)       => api.get(`/admin/assignments/teacher/${tid}`);
 export const removeAssignment        = (id)        => api.delete(`/admin/assign/${id}`);
+export const getAssignmentTerms      = ()          => api.get('/admin/assignments/terms');
+// body: { fromYear, fromTerm, toYear, toTerm, dryRun }
+export const copyAssignmentsToTerm   = (body)      => api.post('/admin/assignments/copy-term', body);
 
 export const updateTeacher       = (id, data) => api.put(`/admin/teachers/${id}`, data);
 export const updateStudent       = (id, data) => api.put(`/admin/students/${id}`, data);
