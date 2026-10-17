@@ -23,6 +23,10 @@ public class CorsConfig {
         config.setAllowedHeaders(List.of("*"));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setExposedHeaders(List.of("Authorization"));
+        // Let browsers cache the CORS "preflight" answer for an hour. Without this they
+        // re-ask before almost every request — an extra Kenya ↔ US round trip each time.
+        // (Chrome caps this at 2 hours; Firefox at 24.)
+        config.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);

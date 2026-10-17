@@ -9,8 +9,7 @@ import com.school.marks.service.MarkService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import java.util.ArrayList;
 import org.springframework.transaction.annotation.Transactional;
@@ -414,6 +413,118 @@ public class AdminController {
                             + a.getClassRoom().getDisplayName() + " · T" + a.getTerm() + " " + a.getAcademicYear()));
         assignmentRepository.deleteById(assignmentId);
         return ResponseEntity.ok("Assignment removed");
+    }
+
+    // ── Copy assignments to a new term ──
+
+    /** Terms that have assignments, newest first — feeds the copy panel and form defaults. */
+    @GetMapping("/assignments/terms")
+    public ResponseEntity<List<Map<String, Object>>> assignmentTerms() {
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (Object[] row : assignmentRepository.termSummary()) {
+            out.add(Map.of("academicYear", row[0], "term", row[1], "count", row[2]));
+        }
+        return ResponseEntity.ok(out);
+    }
+
+    /**
+     * Copies every assignment from one term to another, so teachers aren't
+     * locked out of mark entry at the start of each term.
+     *
+     * Body: { fromYear, fromTerm, toYear, toTerm, dryRun }
+     *  - dryRun=true only counts (for the confirmation dialog) — nothing is written.
+     *  - Same year: same classes. New year: each class maps to the class with the
+     *    same grade in the new year; if that class doesn't exist yet it's skipped.
+     *  - Skips: assignments that already exist, archived subjects, deactivated teachers.
+     */
+    @PostMapping("/assignments/copy-term")
+    @Transactional
+    public ResponseEntity<Map<String, Object>> copyAssignmentsToTerm(@RequestBody Map<String, Object> body) {
+        String fromYear = String.valueOf(body.getOrDefault("fromYear", "")).trim();
+        String toYear   = String.valueOf(body.getOrDefault("toYear", "")).trim();
+        int fromTerm, toTerm;
+        try {
+            fromTerm = Integer.parseInt(String.valueOf(body.get("fromTerm")));
+            toTerm   = Integer.parseInt(String.valueOf(body.get("toTerm")));
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Term must be 1, 2 or 3");
+        }
+        boolean dryRun = Boolean.parseBoolean(String.valueOf(body.getOrDefault("dryRun", "false")));
+
+        if (!fromYear.matches("\\d{4}") || !toYear.matches("\\d{4}")) {
+            throw new IllegalArgumentException("Academic year must be a 4-digit year, e.g. 2026");
+        }
+        if (fromTerm < 1 || fromTerm > 3 || toTerm < 1 || toTerm > 3) {
+            throw new IllegalArgumentException("Term must be 1, 2 or 3");
+        }
+        if (fromYear.equals(toYear) && fromTerm == toTerm) {
+            throw new IllegalArgumentException("Choose a different term to copy to");
+        }
+
+        List<TeacherSubjectAssignment> source = assignmentRepository.findByAcademicYearAndTerm(fromYear, fromTerm);
+        if (source.isEmpty()) {
+            throw new IllegalArgumentException("Term " + fromTerm + " " + fromYear + " has no assignments to copy");
+        }
+
+        // What already exists in the target term: teacher|subject|class
+        Set<String> existing = new HashSet<>();
+        for (TeacherSubjectAssignment a : assignmentRepository.findByAcademicYearAndTerm(toYear, toTerm)) {
+            existing.add(a.getTeacher().getTeacherId() + "|" + a.getSubject().getSubjectId() + "|" + a.getClassRoom().getClassId());
+        }
+
+        // New academic year → map each class to the same grade in that year
+        Map<Integer, ClassRoom> targetClassByGrade = new HashMap<>();
+        boolean sameYear = fromYear.equals(toYear);
+        if (!sameYear) {
+            for (ClassRoom c : classRoomRepository.findByAcademicYear(toYear)) targetClassByGrade.putIfAbsent(c.getGradeLevel(), c);
+        }
+
+        Map<Long, Boolean> teacherActive = new HashMap<>();
+        List<TeacherSubjectAssignment> toCreate = new ArrayList<>();
+        int alreadyThere = 0, archived = 0, inactive = 0, noClass = 0;
+        Set<String> missingClasses = new TreeSet<>();
+
+        for (TeacherSubjectAssignment a : source) {
+            if (!a.getSubject().isActiveSubject()) { archived++; continue; }
+
+            Long tid = a.getTeacher().getTeacherId();
+            boolean active = teacherActive.computeIfAbsent(tid, id ->
+                    userRepository.findByTeacher_TeacherId(id).map(u -> Boolean.TRUE.equals(u.getIsActive())).orElse(false));
+            if (!active) { inactive++; continue; }
+
+            ClassRoom target = sameYear ? a.getClassRoom() : targetClassByGrade.get(a.getClassRoom().getGradeLevel());
+            if (target == null) { noClass++; missingClasses.add(a.getClassRoom().getDisplayName()); continue; }
+
+            String key = tid + "|" + a.getSubject().getSubjectId() + "|" + target.getClassId();
+            if (!existing.add(key)) { alreadyThere++; continue; }   // add() also blocks duplicates within this copy
+
+            toCreate.add(TeacherSubjectAssignment.builder()
+                    .teacher(a.getTeacher()).subject(a.getSubject()).classRoom(target)
+                    .academicYear(toYear).term(toTerm)
+                    .build());
+        }
+
+        if (!dryRun && !toCreate.isEmpty()) {
+            assignmentRepository.saveAll(toCreate);
+            StringBuilder d = new StringBuilder("Copied " + toCreate.size() + " assignments from T" + fromTerm + " "
+                    + fromYear + " to T" + toTerm + " " + toYear);
+            if (alreadyThere > 0) d.append(" · ").append(alreadyThere).append(" already existed");
+            if (archived > 0)     d.append(" · ").append(archived).append(" archived subject(s) skipped");
+            if (inactive > 0)     d.append(" · ").append(inactive).append(" for deactivated teachers skipped");
+            if (noClass > 0)      d.append(" · ").append(noClass).append(" skipped, no ").append(toYear).append(" class for ")
+                                   .append(String.join(", ", missingClasses));
+            audit.record(AuditService.ASSIGNMENTS, "COPY_TERM", "teacher_subject_assignments", null, d.toString());
+        }
+
+        Map<String, Object> res = new LinkedHashMap<>();
+        res.put("dryRun", dryRun);
+        res.put("toCopy", toCreate.size());
+        res.put("alreadyThere", alreadyThere);
+        res.put("archivedSkipped", archived);
+        res.put("inactiveTeacherSkipped", inactive);
+        res.put("noTargetClassSkipped", noClass);
+        res.put("missingClasses", new ArrayList<>(missingClasses));
+        return ResponseEntity.ok(res);
     }
 
     // ── audit snapshots (no sensitive fields) ──

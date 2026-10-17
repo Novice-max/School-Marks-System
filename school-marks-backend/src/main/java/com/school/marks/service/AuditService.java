@@ -11,9 +11,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Single entry point for writing the audit trail.
@@ -91,11 +95,50 @@ public class AuditService {
               known != null ? known.getUserId() : null, reason, null, null);
     }
 
+    /** One row of a batch (e.g. every mark in a bulk save). */
+    public record Item(String action, Long recordId, String description, String oldValue, String newValue) {}
+
+    /**
+     * Writes many entries for the current user in one go (same transaction as
+     * the caller). The user and IP are looked up once, not once per row.
+     */
+    @Transactional
+    public void recordAll(String category, String tableName, List<Item> items) {
+        if (items == null || items.isEmpty()) return;
+        User actor = currentUser();
+        String name = actor != null ? actor.getUsername() : null;
+        String ip = clientIp();
+        List<AuditLog> rows = new ArrayList<>(items.size());
+        for (Item it : items) {
+            rows.add(build(actor, name, category, it.action(), tableName, it.recordId(),
+                           it.description(), it.oldValue(), it.newValue(), ip));
+        }
+        auditLogRepository.saveAll(rows);
+    }
+
+    /**
+     * A refused action (e.g. a teacher saving marks for a subject they aren't
+     * assigned to this term). Written in its OWN transaction, so the entry
+     * survives even though the refused request itself is rolled back.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void recordDenied(String category, String action, String tableName, Long recordId, String description) {
+        User actor = currentUser();
+        write(actor, actor != null ? actor.getUsername() : null, category, action, tableName,
+              recordId, description, null, null);
+    }
+
     // ── internals ──
 
     private void write(User actor, String actorUsername, String category, String action, String tableName,
                        Long recordId, String description, String oldValue, String newValue) {
-        AuditLog entry = AuditLog.builder()
+        auditLogRepository.save(build(actor, actorUsername, category, action, tableName,
+                                      recordId, description, oldValue, newValue, clientIp()));
+    }
+
+    private AuditLog build(User actor, String actorUsername, String category, String action, String tableName,
+                           Long recordId, String description, String oldValue, String newValue, String ip) {
+        return AuditLog.builder()
                 .user(actor)
                 .actorUsername(actorUsername)
                 .actorRole(actor != null ? actor.getRole().name() : null)
@@ -106,9 +149,8 @@ public class AuditService {
                 .description(description)
                 .oldValue(oldValue)
                 .newValue(newValue)
-                .ipAddress(clientIp())
+                .ipAddress(ip)
                 .build();
-        auditLogRepository.save(entry);
     }
 
     public User currentUser() {

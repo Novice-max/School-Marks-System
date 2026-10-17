@@ -65,24 +65,9 @@ public class MarkService {
         Exam exam = examRepository.findById(dto.getExamId())
                 .orElseThrow(() -> new RuntimeException("Exam not found"));
 
-        // SECURITY CHECK: Teacher can only enter marks for their assigned subject+class
+        // SECURITY CHECK: Teacher can only enter marks for their assigned subject+class+term
         if (user.getRole() == User.Role.TEACHER) {
-            if (!subject.isActiveSubject()) {
-                throw new AccessDeniedException("This subject has been archived and no longer accepts marks");
-            }
-
-            boolean isAssigned = assignmentRepository
-                .existsByTeacher_TeacherIdAndSubject_SubjectIdAndClassRoom_ClassIdAndAcademicYearAndTerm(
-                    user.getTeacher().getTeacherId(),
-                    dto.getSubjectId(),
-                    exam.getClassRoom().getClassId(),
-                    exam.getAcademicYear(),
-                    exam.getTerm()
-                );
-
-            if (!isAssigned) {
-                throw new AccessDeniedException("You are not assigned to teach this subject for this class");
-            }
+            checkTeacherMayEnter(user, subject, exam);
         }
 
         String grade = calculateCbcGrade(dto.getScore());
@@ -140,6 +125,154 @@ public class MarkService {
                 dto.getScore().stripTrailingZeros().toPlainString());
 
         return saved;
+    }
+
+    // ===================== BULK MARK ENTRY =====================
+
+    /** What a bulk save did — returned to the browser. */
+    public record BulkSaveResult(int saved, int unchanged, int skippedEmpty) {}
+
+    /**
+     * Saves one class's marks for ONE subject and ONE exam, all-or-nothing.
+     *
+     * Before: the controller called enterOrUpdateMark once per student — about
+     * 9 queries and a separate commit per row (~270 queries for 30 students),
+     * and a failure halfway left the class half-saved.
+     * Now: one transaction; user, subject, exam, permission, students and
+     * existing marks are each loaded once; marks and audit rows are written
+     * together. If anything fails, nothing is saved.
+     */
+    @Transactional
+    public BulkSaveResult enterMarksBulk(List<MarkEntryDTO> dtos, String username) {
+        if (dtos == null || dtos.isEmpty()) return new BulkSaveResult(0, 0, 0);
+
+        Long examId    = dtos.get(0).getExamId();
+        Long subjectId = dtos.get(0).getSubjectId();
+        for (MarkEntryDTO d : dtos) {
+            if (d.getStudentId() == null
+                    || !Objects.equals(d.getExamId(), examId)
+                    || !Objects.equals(d.getSubjectId(), subjectId)) {
+                throw new IllegalArgumentException("A bulk save must be for one subject and one exam.");
+            }
+        }
+
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new NoSuchElementException("User not found"));
+        Subject subject = subjectRepository.findById(subjectId)
+                .orElseThrow(() -> new NoSuchElementException("Subject not found"));
+        Exam exam = examRepository.findById(examId)
+                .orElseThrow(() -> new NoSuchElementException("Exam not found"));
+        Long classId = exam.getClassRoom().getClassId();
+
+        // One permission check for the whole batch (it's always one subject + one exam)
+        if (user.getRole() == User.Role.TEACHER) {
+            checkTeacherMayEnter(user, subject, exam);
+        }
+
+        // Last entry wins if the same student appears twice
+        Map<Long, MarkEntryDTO> byStudent = new LinkedHashMap<>();
+        for (MarkEntryDTO d : dtos) byStudent.put(d.getStudentId(), d);
+
+        // All students in one query; each must belong to this exam's class
+        Map<Long, Student> students = studentRepository.findAllById(byStudent.keySet()).stream()
+                .collect(Collectors.toMap(Student::getStudentId, st -> st));
+        for (Long id : byStudent.keySet()) {
+            Student st = students.get(id);
+            if (st == null) throw new NoSuchElementException("Student not found: " + id);
+            if (st.getClassRoom() == null || !classId.equals(st.getClassRoom().getClassId())) {
+                throw new IllegalArgumentException(st.getFullName() + " is not in this exam's class.");
+            }
+        }
+
+        // All existing marks for this subject + exam in one query
+        Map<Long, Mark> existing = markRepository.findByExam_ExamIdAndSubject_SubjectId(examId, subjectId).stream()
+                .collect(Collectors.toMap(m -> m.getStudent().getStudentId(), m -> m, (a, b) -> a));
+
+        record Change(Mark mark, boolean isNew, String oldValue, Student student) {}
+        List<Change> changes = new ArrayList<>();
+        int unchanged = 0, skippedEmpty = 0;
+        LocalDateTime now = LocalDateTime.now();
+
+        for (MarkEntryDTO d : byStudent.values()) {
+            if (d.getScore() == null) { skippedEmpty++; continue; }
+            Student st = students.get(d.getStudentId());
+            String grade = calculateCbcGrade(d.getScore());
+            int points = calculateGradePoints(grade);
+            Mark mark = existing.get(d.getStudentId());
+
+            if (mark != null) {
+                // The page only sends changed rows, but never write (or log) a non-change
+                if (mark.getScore() != null && mark.getScore().compareTo(d.getScore()) == 0) { unchanged++; continue; }
+                String old = mark.getScore() != null ? mark.getScore().stripTrailingZeros().toPlainString() : null;
+                mark.setScore(d.getScore());
+                mark.setGrade(grade);
+                mark.setGradePoints(points);
+                mark.setUpdatedAt(now);
+                changes.add(new Change(mark, false, old, st));
+            } else {
+                Mark created = Mark.builder()
+                        .student(st).subject(subject).exam(exam)
+                        .score(d.getScore()).grade(grade).gradePoints(points)
+                        .enteredBy(user)
+                        .build();
+                changes.add(new Change(created, true, null, st));
+            }
+        }
+
+        if (changes.isEmpty()) return new BulkSaveResult(0, unchanged, skippedEmpty);
+
+        markRepository.saveAll(changes.stream().map(Change::mark).toList());
+
+        String context = subject.getSubjectName()
+                + " · " + exam.getClassRoom().getDisplayName()
+                + " · " + exam.getExamName() + " T" + exam.getTerm() + " " + exam.getAcademicYear();
+        List<AuditService.Item> items = new ArrayList<>(changes.size());
+        for (Change c : changes) {
+            items.add(new AuditService.Item(
+                    c.isNew() ? "INSERT" : "UPDATE",
+                    c.mark().getMarkId(),
+                    context + " · " + c.student().getFullName() + " (" + c.student().getAdmissionNumber() + ")",
+                    c.oldValue(),
+                    c.mark().getScore().stripTrailingZeros().toPlainString()));
+        }
+        auditService.recordAll(AuditService.MARKS, "marks", items);
+
+        return new BulkSaveResult(changes.size(), unchanged, skippedEmpty);
+    }
+
+    /**
+     * Teachers may only enter marks for an active subject they are assigned to,
+     * in that class, for the exam's academic year and term. A refusal is written
+     * to the audit log (in its own transaction, so it survives the rollback)
+     * before the request is rejected.
+     */
+    private void checkTeacherMayEnter(User user, Subject subject, Exam exam) {
+        String where = subject.getSubjectName()
+                + " · " + exam.getClassRoom().getDisplayName()
+                + " · " + exam.getExamName() + " T" + exam.getTerm() + " " + exam.getAcademicYear();
+
+        if (!subject.isActiveSubject()) {
+            auditService.recordDenied(AuditService.MARKS, "MARK_DENIED", "marks", null,
+                    where + " — refused: subject is archived");
+            throw new AccessDeniedException("This subject has been archived and no longer accepts marks");
+        }
+
+        boolean assigned = user.getTeacher() != null && assignmentRepository
+                .existsByTeacher_TeacherIdAndSubject_SubjectIdAndClassRoom_ClassIdAndAcademicYearAndTerm(
+                        user.getTeacher().getTeacherId(),
+                        subject.getSubjectId(),
+                        exam.getClassRoom().getClassId(),
+                        exam.getAcademicYear(),
+                        exam.getTerm());
+
+        if (!assigned) {
+            auditService.recordDenied(AuditService.MARKS, "MARK_DENIED", "marks", null,
+                    where + " — refused: not assigned to this subject and class for Term " + exam.getTerm()
+                            + " " + exam.getAcademicYear());
+            throw new AccessDeniedException("You are not assigned to " + subject.getSubjectName()
+                    + " for " + exam.getClassRoom().getDisplayName() + " in Term " + exam.getTerm()
+                    + " " + exam.getAcademicYear() + ". Ask the admin to assign you.");
+        }
     }
 
     // ===================== CLASS MARKLIST =====================

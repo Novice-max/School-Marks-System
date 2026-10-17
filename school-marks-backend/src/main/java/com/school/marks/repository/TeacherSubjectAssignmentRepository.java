@@ -2,6 +2,7 @@ package com.school.marks.repository;
 
 import com.school.marks.model.TeacherSubjectAssignment;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 import java.util.List;
 
 public interface TeacherSubjectAssignmentRepository extends JpaRepository<TeacherSubjectAssignment, Long> {
@@ -21,4 +22,12 @@ public interface TeacherSubjectAssignmentRepository extends JpaRepository<Teache
     boolean existsByTeacher_TeacherIdAndClassRoom_ClassId(Long teacherId, Long classId);
 
     long countBySubject_SubjectId(Long subjectId);
+
+    // ── Copy-forward between terms ──
+    List<TeacherSubjectAssignment> findByAcademicYearAndTerm(String academicYear, Integer term);
+
+    /** Each (year, term) that has assignments, newest first: [academicYear, term, count]. */
+    @Query("SELECT a.academicYear, a.term, COUNT(a) FROM TeacherSubjectAssignment a " +
+           "GROUP BY a.academicYear, a.term ORDER BY a.academicYear DESC, a.term DESC")
+    List<Object[]> termSummary();
 }

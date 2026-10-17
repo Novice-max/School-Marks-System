@@ -46,6 +46,12 @@ public class TeacherController {
 
     @PostMapping("/marks/bulk")
     public ResponseEntity<?> enterMarksBulk(@AuthenticationPrincipal UserDetails ud, @RequestBody List<MarkEntryDTO> marks) {
+        if (marks == null || marks.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "No marks to save"));
+        }
+        if (marks.size() > 300) {   // a class is ~30–50; anything this big is not a real save
+            return ResponseEntity.badRequest().body(Map.of("message", "Too many marks in one save"));
+        }
         // Validate ALL marks before saving any — fail fast
         for (MarkEntryDTO dto : marks) {
             if (dto.getScore() != null) {
@@ -56,8 +62,12 @@ public class TeacherController {
                 }
             }
         }
-        for (MarkEntryDTO dto : marks) markService.enterOrUpdateMark(dto, ud.getUsername());
-        return ResponseEntity.ok("Marks saved successfully");
+        // One transaction for the whole class: all marks save, or none do
+        MarkService.BulkSaveResult result = markService.enterMarksBulk(marks, ud.getUsername());
+        return ResponseEntity.ok(Map.of(
+                "message", "Marks saved successfully",
+                "saved", result.saved(),
+                "unchanged", result.unchanged()));
     }
 
     @GetMapping("/assignments")

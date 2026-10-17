@@ -6,12 +6,56 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.Map;
 import java.util.NoSuchElementException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    // ── Request problems: the CALLER got something wrong, so 4xx — never 500 ──
+    // (Before these, unknown URLs and bad input fell through to the catch-all
+    //  below and showed up as 500 "server errors" in the network logs.)
+
+    /** Unknown URL — bots probing paths, old bookmarks. */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<Map<String, String>> handleNoResource(NoResourceFoundException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", "Not found"));
+    }
+
+    /** e.g. GET on an endpoint that only accepts POST. */
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<Map<String, String>> handleMethod(HttpRequestMethodNotSupportedException ex) {
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(Map.of("message", "Method not allowed"));
+    }
+
+    /** Body isn't valid JSON, or a field has the wrong type. */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<Map<String, String>> handleUnreadable(HttpMessageNotReadableException ex) {
+        return ResponseEntity.badRequest().body(Map.of("message", "The request could not be read. Check the values entered."));
+    }
+
+    /** @Valid failed (e.g. a required field was blank). */
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<Map<String, String>> handleInvalid(MethodArgumentNotValidException ex) {
+        String msg = ex.getBindingResult().getFieldErrors().stream()
+                .findFirst()
+                .map(fe -> fe.getField() + ": " + fe.getDefaultMessage())
+                .orElse("Some values are missing or invalid.");
+        return ResponseEntity.badRequest().body(Map.of("message", msg));
+    }
+
+    /** e.g. /api/teacher/marks/abc/12 — "abc" isn't a number. */
+    @ExceptionHandler({MethodArgumentTypeMismatchException.class, MissingServletRequestParameterException.class})
+    public ResponseEntity<Map<String, String>> handleBadParam(Exception ex) {
+        return ResponseEntity.badRequest().body(Map.of("message", "Invalid or missing request parameter."));
+    }
 
     /**
      * Database constraint violations (duplicate keys, foreign key issues).
