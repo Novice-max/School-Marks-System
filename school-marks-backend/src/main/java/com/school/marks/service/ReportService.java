@@ -203,6 +203,12 @@ public class ReportService {
         for (String subName : allSubjects) addHeaderCell(table, subName, bold, cf);
         addHeaderCell(table, "Total", bold, cf); addHeaderCell(table, "Average", bold, cf); addHeaderCell(table, "Overall", bold, cf);
 
+        // Running sums for the "Subject Average" row at the bottom
+        double[] subjectSum   = new double[subjectCount];
+        int[]    subjectCount_ = new int[subjectCount];
+        double   sumOfTotals  = 0;
+        double   sumOfAverages = 0;
+
         boolean alt = false;
         for (StudentMarkSummaryDTO student : marklist) {
             DeviceRgb rc = alt ? ALT_ROW_COLOR : null;
@@ -212,9 +218,12 @@ public class ReportService {
             Map<String, SubjectMarkDTO> markMap = new HashMap<>();
             for (SubjectMarkDTO sm : student.getSubjectMarks()) markMap.put(sm.getSubjectName(), sm);
             double totalPoints = 0; int counted = 0;
-            for (String subName : allSubjects) {
+            for (int si = 0; si < subjectCount; si++) {
+                String subName = allSubjects.get(si);
                 SubjectMarkDTO sm = markMap.get(subName);
                 if (sm != null && sm.getScore() != null) {
+                    subjectSum[si] += sm.getScore().doubleValue();
+                    subjectCount_[si]++;
                     Cell cell = new Cell().add(new Paragraph(fmtMark(sm.getScore())).setFont(regular).setFontSize(cf))
                             .setTextAlignment(TextAlignment.CENTER).setVerticalAlignment(VerticalAlignment.MIDDLE).setPadding(3);
                     if (rc != null) cell.setBackgroundColor(rc);
@@ -224,6 +233,8 @@ public class ReportService {
                 } else { addCell(table, "-", regular, rc, cf); }
             }
             double avg = counted > 0 ? BigDecimal.valueOf(totalPoints / counted).setScale(2, RoundingMode.HALF_UP).doubleValue() : 0;
+            sumOfTotals   += totalPoints;
+            sumOfAverages += avg;
             String overallGrade = getGrade(avg);
             addCell(table, String.format("%.1f", totalPoints), regular, rc, cf);
             addCell(table, String.format("%.2f", avg), regular, rc, cf);
@@ -233,8 +244,29 @@ public class ReportService {
             if (rc != null) gc.setBackgroundColor(rc);
             table.addCell(gc); alt = !alt;
         }
+
+        // ── Subject Average row ──
+        // Each subject's mean over the students who actually have a mark in it
+        // (a "-" is not counted as zero). Coloured by the CBC grade of that mean.
+        double classAvg = sumOfAverages / marklist.size();
+        addSummaryCell(table, "", bold, cf);
+        addSummaryCell(table, "", bold, cf);
+        addSummaryCell(table, "Subject Average", bold, cf);
+        for (int si = 0; si < subjectCount; si++) {
+            if (subjectCount_[si] == 0) { addSummaryCell(table, "-", bold, cf); continue; }
+            double subAvg = subjectSum[si] / subjectCount_[si];
+            Cell c = summaryCell(String.format("%.1f", subAvg), bold, cf);
+            c.setFontColor(getGradeColor(getGrade(subAvg)));
+            table.addCell(c);
+        }
+        addSummaryCell(table, String.format("%.1f", sumOfTotals / marklist.size()), bold, cf);
+        addSummaryCell(table, String.format("%.2f", classAvg), bold, cf);
+        String classGrade = getGrade(classAvg);
+        Cell cg = summaryCell(classGrade, bold, cf);
+        cg.setFontColor(getGradeColor(classGrade));
+        table.addCell(cg);
+
         doc.add(table);
-        double classAvg = marklist.stream().mapToDouble(s -> s.getAverage() != null ? s.getAverage() : 0).average().orElse(0);
         doc.add(new Paragraph("Class Average: " + BigDecimal.valueOf(classAvg).setScale(2, RoundingMode.HALF_UP)
                 + "  |  Total Students: " + marklist.size()).setFont(bold).setFontSize(10).setFontColor(HEADER_COLOR));
         doc.close(); return baos.toByteArray();
@@ -845,6 +877,7 @@ public class ReportService {
                 if (rc!=null) gc.setBackgroundColor(rc); t.addCell(gc); alt=!alt;
             }
             doc.add(t);
+            addSubjectAveragesTable(doc, ml, bold);
             double ca=ml.stream().mapToDouble(x->x.getAverage()!=null?x.getAverage():0).average().orElse(0);
             doc.add(new Paragraph(String.format("Class Average: %.2f  |  Students: %d",ca,ml.size())).setFont(bold).setFontSize(10).setFontColor(HEADER_COLOR).setMarginBottom(10));
         }
@@ -975,6 +1008,49 @@ public class ReportService {
         Cell c = new Cell().add(new Paragraph(text!=null?text:"-").setFont(f).setFontSize(fs)).setTextAlignment(TextAlignment.CENTER).setVerticalAlignment(VerticalAlignment.MIDDLE).setPadding(3);
         if (bg!=null) c.setBackgroundColor(bg); t.addCell(c);
     }
+    /**
+     * School-wide report: one compact row of per-subject averages under each
+     * class's table. Mean over students who have a mark in that subject
+     * ("no mark" is not counted as zero), coloured by the CBC grade of the mean.
+     */
+    private void addSubjectAveragesTable(Document doc, List<StudentMarkSummaryDTO> ml, PdfFont bold) {
+        LinkedHashMap<String, double[]> sums = new LinkedHashMap<>();   // subject -> {sum, count}
+        for (StudentMarkSummaryDTO stu : ml) {
+            for (SubjectMarkDTO sm : stu.getSubjectMarks()) {
+                if (sm.getScore() == null) continue;
+                double[] acc = sums.computeIfAbsent(sm.getSubjectName(), k -> new double[2]);
+                acc[0] += sm.getScore().doubleValue();
+                acc[1]++;
+            }
+        }
+        if (sums.isEmpty()) return;
+
+        float fs = sums.size() > 8 ? 7f : 8f;
+        float[] widths = new float[sums.size() + 1];
+        widths[0] = 2.2f;
+        for (int i = 1; i < widths.length; i++) widths[i] = 1f;
+        Table avgTable = new Table(UnitValue.createPercentArray(widths)).setWidth(UnitValue.createPercentValue(100)).setMarginTop(4);
+
+        addHeaderCell(avgTable, "Subject", bold, fs);
+        for (String name : sums.keySet()) addHeaderCell(avgTable, name, bold, fs);
+
+        avgTable.addCell(summaryCell("Subject Average", bold, fs));
+        for (double[] acc : sums.values()) {
+            double avg = acc[0] / acc[1];
+            Cell c = summaryCell(String.format("%.1f", avg), bold, fs);
+            c.setFontColor(getGradeColor(getGrade(avg)));
+            avgTable.addCell(c);
+        }
+        doc.add(avgTable);
+    }
+
+    // Bold cell on the shaded summary row (marklist "Subject Average")
+    private Cell summaryCell(String text, PdfFont f, float fs) {
+        return new Cell().add(new Paragraph(text).setFont(f).setFontSize(fs))
+                .setTextAlignment(TextAlignment.CENTER).setVerticalAlignment(VerticalAlignment.MIDDLE)
+                .setPadding(4).setBackgroundColor(TOTAL_ROW_BG);
+    }
+    private void addSummaryCell(Table t, String text, PdfFont f, float fs) { t.addCell(summaryCell(text, f, fs)); }
     private void addMarkCell(Table t, String text, PdfFont f, float fs, DeviceRgb bg, TextAlignment a, float mh) {
         Cell c = new Cell().add(new Paragraph(text!=null?text:"").setFont(f).setFontSize(fs)).setTextAlignment(a).setVerticalAlignment(VerticalAlignment.MIDDLE).setPadding(4).setMinHeight(mh);
         if (bg!=null) c.setBackgroundColor(bg); t.addCell(c);
